@@ -180,7 +180,10 @@ for epoch in range(EPOCHS):
             'vocab_size': vocab_size,
             'embedding_dim': EMBEDDING_DIM,
             'total_epochs': EPOCHS,
-            'model_file': best_model_path
+            'model_file': best_model_path,
+            'max_epochs': EPOCHS,
+            'context_size': CONTEXT_SIZE,
+            'embedding_dim': EMBEDDING_DIM
         }
         
         with open(model_info_path, 'w') as f:
