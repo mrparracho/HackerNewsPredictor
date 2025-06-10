@@ -61,7 +61,7 @@ class TextProcessor:
 def main():
     # Get the absolute path to the text8 file
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, 'data', 'text8')
+    file_path = os.path.join(current_dir, '..', 'data', 'text8')
     
     # Initialize the processor
     processor = TextProcessor(file_path)
