@@ -3,8 +3,58 @@ from collections import Counter
 from typing import Dict, List, Tuple
 import time
 import os
+import json
 import matplotlib.pyplot as plt
 import numpy as np
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+import nltk
+
+# Download required NLTK data
+nltk.download('wordnet')  # for lemmatization
+nltk.download('averaged_perceptron_tagger')  # for POS tagging
+nltk.download('punkt')  # for tokenization
+nltk.download('averaged_perceptron_tagger_eng')  # specific English model
+
+def get_wordnet_pos(word: str) -> str:
+    """
+    Map POS tag to first character lemmatize() accepts.
+    """
+    tag = nltk.pos_tag([word])[0][1][0].upper()
+    tag_dict = {
+        "J": wordnet.ADJ,
+        "N": wordnet.NOUN,
+        "V": wordnet.VERB,
+        "R": wordnet.ADV
+    }
+    return tag_dict.get(tag, wordnet.NOUN)
+
+def lemmatize_word_index_dict(word_to_index: Dict[str, int]) -> Dict[str, int]:
+    """
+    Transform a word-to-index dictionary by mapping words to their lemma indices.
+    
+    Args:
+        word_to_index (Dict[str, int]): Original dictionary mapping words to indices
+        
+    Returns:
+        Dict[str, int]: New dictionary where words are mapped to their lemma indices
+    """
+    lemmatizer = WordNetLemmatizer()
+    lemma_to_index = {}
+    word_to_lemma_index = {}
+    
+    # First pass: collect all unique lemmas and assign them indices
+    for word in word_to_index.keys():
+        lemma = lemmatizer.lemmatize(word, get_wordnet_pos(word))
+        if lemma not in lemma_to_index:
+            lemma_to_index[lemma] = len(lemma_to_index)
+    
+    # Second pass: map each word to its lemma's index
+    for word in word_to_index.keys():
+        lemma = lemmatizer.lemmatize(word, get_wordnet_pos(word))
+        word_to_lemma_index[word] = lemma_to_index[lemma]
+    
+    return word_to_lemma_index
 
 class TextProcessor:
     def __init__(self, file_path: str, chunk_size: int = 1024 * 1024):
@@ -58,24 +108,24 @@ class TextProcessor:
 
         return self.word_count, dict(self.word_freq)
 
-def main():
-    # Get the absolute path to the text8 file
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, '..', 'data', 'text8')
-    
-    # Initialize the processor
-    processor = TextProcessor(file_path)
-    
-    # Process the file and measure time
-    start_time = time.time()
-    total_words, word_freq = processor.process_file()
-    end_time = time.time()
-    
-    # Print results
-    print(f"Total number of words: {total_words}")
-    print(f"Number of unique words: {len(word_freq)}")
-    print(f"Processing time: {end_time - start_time:.2f} seconds")
+    def create_word_index_dict(self) -> Dict[str, int]:
+        """
+        Create a dictionary mapping unique words to their indices.
+        Words are sorted by frequency (most frequent first).
+        
+        Returns:
+            Dict[str, int]: Dictionary mapping words to their indices
+        """
+        # Sort words by frequency (most frequent first)
+        sorted_words = sorted(self.word_freq.items(), key=lambda x: x[1], reverse=True)
+        
+        # Create word to index mapping
+        word_to_index = {word: idx for idx, (word, _) in enumerate(sorted_words)}
+        
+        return word_to_index
 
+def run_stats(total_words: int, word_freq: Dict[str, int]):
+    """Run statistical analysis and create visualizations for word frequency data."""
     # Calculate probabilities
     word_probs = {word: freq/total_words for word, freq in word_freq.items()}
 
@@ -111,6 +161,49 @@ def main():
     # Show the plot
     plt.show()
 
+def main():
+    # Get the absolute path to the text8 file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, '..', 'data', 'text8')
+    
+    # Initialize the processor
+    processor = TextProcessor(file_path)
+    
+    # Process the file and measure time
+    start_time = time.time()
+    total_words, word_freq = processor.process_file()
+    end_time = time.time()
+    
+    # Print results
+    print(f"Total number of words: {total_words}")
+    print(f"Number of unique words: {len(word_freq)}")
+    print(f"Processing time: {end_time - start_time:.2f} seconds")
+
+    # Create word to index mapping
+    word_to_index = processor.create_word_index_dict()
+    
+    # Create lemmatized version of the dictionary
+    word_to_lemma_index = lemmatize_word_index_dict(word_to_index)
+    
+    # Save the word_to_lemma_index dictionary as JSON file in root folder
+    root_dir = os.path.join(current_dir, '..')
+    json_file_path = os.path.join(root_dir, 'word_to_lemma_index.json')
+    
+    with open(json_file_path, 'w', encoding='utf-8') as json_file:
+        json.dump(word_to_lemma_index, json_file, indent=2, ensure_ascii=False)
+    
+    print(f"\nSaved word_to_lemma_index dictionary to: {json_file_path}")
+    print(f"Dictionary contains {len(word_to_lemma_index)} words mapped to {len(set(word_to_lemma_index.values()))} unique lemmas")
+    
+    # Print some examples of lemmatization
+    print("\nExamples of lemmatization:")
+    example_words = ['running', 'runs', 'ran', 'better', 'best', 'good']
+    for word in example_words:
+        if word in word_to_lemma_index:
+            print(f"Word: {word:10} -> Lemma index: {word_to_lemma_index[word]}")
+
+    # # Run statistical analysis and visualization
+    # run_stats(total_words, word_freq)
 
 if __name__ == "__main__":
     main() 
