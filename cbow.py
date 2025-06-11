@@ -22,6 +22,13 @@ if 'WANDB_API_KEY' not in os.environ:
 # Initialize wandb
 wandb.login()  # Ensure to run source.env in terminal before running this script
 
+# Check it finds the gpu:
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+# Optional: speed up for fixed-size inputs
+torch.backends.cudnn.benchmark = True
+
+
 CONTEXT_SIZE = 4  # 2 words to the left, 2 to the right
 EMBEDDING_DIM = 8  # Reduced from 128
 EPOCHS = 1
@@ -115,7 +122,7 @@ wandb.init(
 )
 
 # Initialize model and training components
-model = CBOW(vocab_size, EMBEDDING_DIM)
+model = CBOW(vocab_size, EMBEDDING_DIM).to(device)
 loss_function = nn.NLLLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
 
@@ -146,8 +153,8 @@ for epoch in range(EPOCHS):
         # Process each sample in the batch
         for idx in batch_indices:
             context, target = data[idx]
-            context_vector = make_context_vector(context, word_to_ix)
-            target_tensor = torch.tensor([word_to_ix[target]], dtype=torch.long)  # Add batch dimension and specify dtype
+            context_vector = make_context_vector(context, word_to_ix).to(device) # move to gpu
+            target_tensor = torch.tensor([word_to_ix[target]], dtype=torch.long).to(device) # move to gpu
 
             log_probs = model(context_vector)
             loss = loss_function(log_probs, target_tensor)
@@ -244,7 +251,7 @@ print("="*50)
 
 # TESTING
 context = ['people','create','to', 'direct']
-context_vector = make_context_vector(context, word_to_ix)
+context_vector = make_context_vector(context, word_to_ix).to(device)
 a = model(context_vector)
 
 # Print result
