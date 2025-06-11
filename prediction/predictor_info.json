@@ -1,0 +1,10 @@
+{
+  "epoch": 14,
+  "train_loss": 839.4778304838799,
+  "test_loss": 847.3348876953125,
+  "input_dim": 32,
+  "total_epochs": 50,
+  "model_file": "best_predictor.pth",
+  "max_epochs": 50,
+  "learning_rate": 0.001
+}
