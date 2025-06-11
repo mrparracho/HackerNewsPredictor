@@ -1,13 +1,13 @@
 {
-  "epoch": 14,
-  "loss": 12.407070110584128,
-  "perplexity": 244524.34375,
-  "vocab_size": 243733,
-  "embedding_dim": 32,
-  "total_epochs": 100,
+  "epoch": 1,
+  "loss": 0.0037392051474312597,
+  "perplexity": 1.0037461519241333,
+  "vocab_size": 230704,
+  "embedding_dim": 8,
+  "total_epochs": 1,
   "model_file": "best_cbow_model.pth",
-  "max_epochs": 100,
-  "context_size": 8,
+  "max_epochs": 1,
+  "context_size": 4,
   "batch_size": 1024,
   "accumulation_steps": 4
 }
