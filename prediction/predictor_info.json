@@ -1,7 +1,7 @@
 {
-  "epoch": 14,
-  "train_loss": 839.4778304838799,
-  "test_loss": 847.3348876953125,
+  "epoch": 22,
+  "train_loss": 793.7784689364486,
+  "test_loss": 918.8977783203125,
   "input_dim": 32,
   "total_epochs": 50,
   "model_file": "best_predictor.pth",
