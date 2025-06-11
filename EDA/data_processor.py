@@ -12,7 +12,6 @@ import nltk
 import re
 import string
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from itertools import islice
 
 # Download required NLTK data
 nltk.download('wordnet')  # for lemmatization
@@ -47,14 +46,14 @@ def clean_text(text: str) -> str:
     # Convert to lowercase
     text = text.lower()
     
-    # Remove URLs
-    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+    # # Remove URLs
+    # text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
     
-    # Remove punctuation and special characters
-    text = text.translate(str.maketrans('', '', string.punctuation))
+    # # Remove punctuation and special characters
+    # text = text.translate(str.maketrans('', '', string.punctuation))
     
-    # Remove numbers
-    text = re.sub(r'\d+', '', text)
+    # # Remove numbers
+    # text = re.sub(r'\d+', '', text)
     
     # Remove extra whitespace
     text = ' '.join(text.split())
@@ -103,13 +102,6 @@ def lemmatize_word_index_dict(word_to_index: Dict[str, int], num_threads: int = 
     """
     Transform a word-to-index dictionary by mapping words to their lemma indices.
     Uses parallel processing for lemmatization.
-    
-    Args:
-        word_to_index (Dict[str, int]): Original dictionary mapping words to indices
-        num_threads (int): Number of threads to use for parallel processing
-        
-    Returns:
-        Dict[str, int]: New dictionary where words are mapped to their lemma indices
     """
     # Split words into batches for parallel processing
     words = list(word_to_index.keys())
@@ -191,22 +183,6 @@ class TextProcessor:
 
         return self.word_count, dict(self.word_freq)
 
-    def create_word_index_dict(self) -> Dict[str, int]:
-        """
-        Create a dictionary mapping unique words to their indices.
-        Words are sorted by frequency (most frequent first).
-        
-        Returns:
-            Dict[str, int]: Dictionary mapping words to their indices
-        """
-        # Sort words by frequency (most frequent first)
-        sorted_words = sorted(self.word_freq.items(), key=lambda x: x[1], reverse=True)
-    
-        # Create word to index mapping
-        word_to_index = {word: idx for idx, (word, _) in enumerate(sorted_words)}
-        
-        return word_to_index
-
 def run_stats(total_words: int, word_freq: Dict[str, int]):
     """Run statistical analysis and create visualizations for word frequency data."""
     # Calculate probabilities
@@ -245,39 +221,28 @@ def run_stats(total_words: int, word_freq: Dict[str, int]):
     plt.show()
 
 def main():
-    # Get the absolute path to the files
+    # Get the absolute path to the text8 file
     current_dir = os.path.dirname(os.path.abspath(__file__))
     text8_path = os.path.join(current_dir, '..', 'data', 'text8')
-    hn_data_path = os.path.join(current_dir, '..', 'data', 'hn_data_massive.txt')
     
-    # Initialize the processors
+    # Initialize the processor
     text8_processor = TextProcessor(text8_path)
-    hn_processor = TextProcessor(hn_data_path)
     
-    # Process both files and measure time
+    # Process the file and measure time
     start_time = time.time()
     
     print("Processing text8 file...")
     text8_words, text8_freq = text8_processor.process_file()
-    
-    print("Processing HN data file...")
-    hn_words, hn_freq = hn_processor.process_file()
-    
-    # Combine word frequencies
-    combined_freq = text8_freq.copy()
-    combined_freq.update(hn_freq)
     
     end_time = time.time()
     
     # Print results
     print(f"\nResults:")
     print(f"text8 - Total words: {text8_words}, Unique words: {len(text8_freq)}")
-    print(f"HN data - Total words: {hn_words}, Unique words: {len(hn_freq)}")
-    print(f"Combined - Total words: {text8_words + hn_words}, Unique words: {len(combined_freq)}")
     print(f"Processing time: {end_time - start_time:.2f} seconds")
 
-    # Create word to index mapping using combined frequencies
-    word_to_index = {word: idx for idx, (word, _) in enumerate(sorted(combined_freq.items(), key=lambda x: x[1], reverse=True))}
+    # Create word to index mapping
+    word_to_index = {word: idx for idx, (word, _) in enumerate(sorted(text8_freq.items(), key=lambda x: x[1], reverse=True))}
     
     # Create lemmatized version of the dictionary using parallel processing
     print("\nStarting parallel lemmatization...")
@@ -286,9 +251,9 @@ def main():
     lemmatization_end = time.time()
     print(f"Lemmatization completed in {lemmatization_end - lemmatization_start:.2f} seconds")
     
-    # Save the word_to_lemma_index dictionary as JSON file in root folder
+    # Save the word_to_lemma_index dictionary as JSON file
     root_dir = os.path.join(current_dir, '..')
-    json_file_path = os.path.join(root_dir, 'word_to_lemma_index.json')
+    json_file_path = os.path.join(root_dir, 'text8_word_to_lemma_index.json')
     
     with open(json_file_path, 'w', encoding='utf-8') as json_file:
         json.dump(word_to_lemma_index, json_file, indent=2, ensure_ascii=False)
@@ -307,8 +272,8 @@ def main():
         if word in word_to_lemma_index:
             print(f"Word: {word:10} -> Lemma index: {word_to_lemma_index[word]}")
 
-    # Run statistical analysis and visualization on combined data
-    run_stats(text8_words + hn_words, combined_freq)
+    # Run statistical analysis and visualization
+    run_stats(text8_words, text8_freq)
 
 if __name__ == "__main__":
     main() 
