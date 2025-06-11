@@ -17,9 +17,11 @@ import wandb
 from datetime import datetime
 from tqdm import tqdm  # Add tqdm import
 
-def make_context_vector(context, word_to_ix):
-    idxs = [word_to_ix[w] for w in context]
-    return torch.tensor(idxs, dtype=torch.long)
+# Check we have the wandb key in our env
+if 'WANDB_API_KEY' not in os.environ:
+    raise EnvironmentError("Please set the WANDB_API_KEY environment variable in your .env file before running this script.")
+# Initialize wandb
+wandb.login()  # Ensure to run source.env in terminal before running this script
 
 CONTEXT_SIZE = 4  # 2 words to the left, 2 to the right
 EMBEDDING_DIM = 8  # Reduced from 128
@@ -28,6 +30,13 @@ BATCH_SIZE = 1024  # Process data in smaller batches
 ACCUMULATION_STEPS = 4  # Accumulate gradients over multiple batches
 LEARNING_RATE = 0.001
 MAX_BATCHES = 100  # Number of batches to process (1024 for full file)
+
+
+
+
+def make_context_vector(context, word_to_ix):
+    idxs = [word_to_ix[w] for w in context]
+    return torch.tensor(idxs, dtype=torch.long)
 
 # --- Configuration for file loading ---
 TEXT_FILE_PATH = os.path.join('data/', 'text8') # Path to your text file
