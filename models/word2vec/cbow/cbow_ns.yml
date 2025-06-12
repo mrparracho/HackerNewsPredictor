@@ -9,8 +9,8 @@ BATCH_SIZE: 4096
 EMBEDDING_SIZE: 128
 
 # Training Parameters
+NUM_EPOCHS: 20
 LEARNING_RATE: 0.001
-NUM_EPOCHS: 10
 OPTIMIZER: "Adam"
 
 # Wandb Parameters

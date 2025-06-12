@@ -31,8 +31,15 @@ def get_dummy_vocabulary():
         'and', 'i', 'like', 'to', 'code',
         'python', 'machine', 'learning', 'is', 'fun'
     ]
-    word_to_index = {word: i for i, word in enumerate(set(vocab))}
-    word_to_lemma_index = {word: i for i, word in enumerate(set(vocab))}  # Dummy lemma mapping
+    # Create unique vocabulary
+    unique_vocab = list(set(vocab))
+    # Create mappings
+    word_to_index = {word: i for i, word in enumerate(unique_vocab)}
+    word_to_lemma_index = {word: i for i, word in enumerate(unique_vocab)}  # Dummy lemma mapping
+    # Add UNK token with last index
+    unk_idx = len(unique_vocab)
+    word_to_index['<UNK>'] = unk_idx
+    word_to_lemma_index['<UNK>'] = unk_idx
     return word_to_index, word_to_lemma_index
 
 def get_training_data(word_to_index):
@@ -41,7 +48,8 @@ def get_training_data(word_to_index):
     with open(os.path.join('data', 'combined_data.txt'), 'r', encoding='utf-8') as f:
         text = f.read()
     words = text.lower().split()
-    encoded = [word_to_index[word] for word in words if word in word_to_index]
+    # Use UNK token for unknown words
+    encoded = [word_to_index[word] if word in word_to_index else word_to_index['<UNK>'] for word in words]
     print(f"Loaded {len(encoded):,} words")
     return encoded
 
@@ -61,15 +69,21 @@ def train(dummy=False):
         print("Using dummy vocabulary for testing...")
         word_to_index, word_to_lemma_index = get_dummy_vocabulary()
         # Use the dummy example
-        example_text = "python machine learning is fun"
+        example_text = "python machine learning is fun ---"
         words = example_text.lower().split()
-        encoded = [word_to_index[word] for word in words if word in word_to_index]
+        encoded = [word_to_index[word] if word in word_to_index else word_to_index['<UNK>'] for word in words]
+        print(encoded)
     else:
         print("Loading vocabulary and training data from ETL pipeline...")
         word_to_index, word_to_lemma_index = load_vocabulary()
+        # Add UNK token with last index if not present
+        if '<UNK>' not in word_to_lemma_index:
+            unk_idx = len(word_to_lemma_index)
+            word_to_lemma_index['<UNK>'] = unk_idx
+            word_to_index['<UNK>'] = unk_idx
         encoded = get_training_data(word_to_index)
     
-    vocab_size = len(word_to_index)
+    vocab_size = len(word_to_lemma_index)
     print(f"Vocabulary size: {vocab_size}")
 
     # Create dataset and dataloader
@@ -88,17 +102,28 @@ def train(dummy=False):
     best_loss = float('inf')
     for epoch in range(config['NUM_EPOCHS']):
         total_loss = 0
-        pbar = tqdm(loader, desc=f"Época {epoch+1}", unit="batch")
-        for context, target, negatives in pbar:
+        pbar = tqdm(loader, desc=f"Epoch {epoch+1}", unit="batch")
+        for batch_idx, (context, target, negatives) in enumerate(pbar):
             loss = model(context, target, negatives)
             opt.zero_grad()
             loss.backward()
             opt.step()
             total_loss += loss.item()
+            
+            # Log batch loss to wandb
+            wandb.log({
+                "epoch": epoch + 1,
+                "batch": batch_idx,
+                "batch_loss": loss.item()
+            })
+            
             pbar.set_postfix(loss=loss.item())
         
         avg_loss = total_loss / len(loader)
-        wandb.log({"epoch": epoch + 1, "loss": avg_loss})
+        wandb.log({
+            "epoch": epoch + 1,
+            "epoch_loss": avg_loss
+        })
 
         # Save best model
         if avg_loss < best_loss:
@@ -132,4 +157,4 @@ if __name__ == "__main__":
     parser.add_argument('--dummy', action='store_true', help='Use dummy vocabulary for testing', default=False)
     args = parser.parse_args()
     
-    train(dummy=args.dummy) 
+    train(dummy=args.dummy)
