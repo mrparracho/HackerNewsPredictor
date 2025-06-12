@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # # ML Training Service
+  # ml_training:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.ml
+  #   container_name: mlx_training
+  #   environment:
+  #     - WANDB_API_KEY=${WANDB_API_KEY}
+  #     - CUDA_VISIBLE_DEVICES=0
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./models:/app/models
+  #     - ./logs:/app/logs
+  #     - ./wandb:/app/wandb
+  #   networks:
+  #     - mlx_network
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: mlx_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+    # depends_on:
+    #   ml_training:
+    #     condition: service_completed_successfully
+    networks:
+      - mlx_network
+
+  # Streamlit Service (Frontend)
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: mlx_streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - mlx_network
+
+  # Jupyter Notebook Service (Optional)
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    container_name: mlx_jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./EDA:/app/EDA
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - mlx_network
+    command: ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
+    profiles:
+      - development
+
+networks:
+  mlx_network:
+    driver: bridge 

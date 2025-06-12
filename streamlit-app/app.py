@@ -1,14 +1,7 @@
 import streamlit as st
-import torch
+import requests
 import json
 import os
-import sys
-import numpy as np
-
-# Add parent directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from prediction.models.predictor import SimplePredictor
-from prediction.utils.data_processing import load_cbow_embeddings
 
 # Set page config
 st.set_page_config(
@@ -43,74 +36,72 @@ st.markdown("""
         color: #666;
         margin-bottom: 2rem;
     }
+    .api-status {
+        padding: 0.5rem 1rem;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+    }
+    .api-status.online {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    .api-status.offline {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-@st.cache_resource
-def load_model_and_embeddings():
-    """Load the model and embeddings (cached to avoid reloading)."""
-    # Get the parent directory path
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    
-    # Load word to index mapping
-    word_to_ix_path = os.path.join(parent_dir, 'word_to_lemma_index.json')
-    with open(word_to_ix_path, 'r') as f:
-        word_to_ix = json.load(f)
-    
-    # Load CBOW embeddings
-    cbow_model_path = os.path.join(parent_dir, 'best_cbow_model.pth')
-    embeddings = load_cbow_embeddings(cbow_model_path)
-    
-    # Load the predictor model
-    model = SimplePredictor(input_dim=32)
-    predictor_path = os.path.join(parent_dir, 'best_predictor.pth')
-    checkpoint = torch.load(predictor_path)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model.eval()
-    
-    return model, embeddings, word_to_ix
+# API Configuration - Use environment variable in Docker, fallback to localhost
+API_URL = os.getenv('API_URL', 'http://localhost:8000')
 
-def create_title_embedding(title, word_to_ix, embeddings, embedding_dim=32):
-    """Create embedding for a single title."""
-    words = title.lower().split()
-    word_embeddings = []
-    
-    for word in words:
-        if word in word_to_ix:
-            word_ix = word_to_ix[word]
-            embedding = embeddings[word_ix].cpu().numpy()
-            word_embeddings.append(embedding)
-    
-    if not word_embeddings:
-        return np.zeros(embedding_dim)
-    
-    return np.mean(word_embeddings, axis=0)
+def check_api_status():
+    """Check if the API is running."""
+    try:
+        response = requests.get(f"{API_URL}/", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
-def predict_score(title, model, embeddings, word_to_ix):
-    """Predict score for a given title."""
-    # Create embedding
-    title_embedding = create_title_embedding(title, word_to_ix, embeddings)
-    
-    # Convert to tensor and add batch dimension
-    title_tensor = torch.tensor(title_embedding, dtype=torch.float32).unsqueeze(0)
-    
-    # Make prediction
-    with torch.no_grad():
-        prediction = model(title_tensor)
-    
-    return prediction.item()
+def predict_score_api(title):
+    """Make prediction using the API service."""
+    try:
+        response = requests.post(
+            f"{API_URL}/predict",
+            json={"title": title},
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"API Error: {str(e)}")
 
 def main():
     # Title and description
     st.markdown('<div class="title">Hacker News Score Predictor 🚀</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Predict how many upvotes your post might get!</div>', unsafe_allow_html=True)
     
-    # Load model and embeddings
-    try:
-        model, embeddings, word_to_ix = load_model_and_embeddings()
-    except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
-        st.info("Please make sure you have trained the model first!")
+    # Show API URL for debugging
+    st.sidebar.markdown(f"**API URL:** {API_URL}")
+    
+    # Check API status
+    api_online = check_api_status()
+    if api_online:
+        st.markdown('<div class="api-status online">✅ API Service Online</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="api-status offline">❌ API Service Offline</div>', unsafe_allow_html=True)
+        st.error(f"""
+        **API Service is not running!**
+        
+        Expected API URL: {API_URL}
+        
+        To use this app, please start the API service first:
+        ```bash
+        python api_service.py
+        ```
+        """)
         return
     
     # Input section
@@ -120,12 +111,19 @@ def main():
     if title:
         # Make prediction
         try:
-            predicted_score = predict_score(title, model, embeddings, word_to_ix)
+            with st.spinner("Making prediction..."):
+                result = predict_score_api(title)
+            
+            predicted_score = result["predicted_score"]
             
             # Display prediction
             st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
             st.markdown("### Prediction")
             st.markdown(f"**Predicted Score:** {predicted_score:.1f} upvotes")
+            
+            # Show API source information
+            st.markdown(f"**API Source:** {result.get('api_source', 'Unknown')}")
+            st.markdown(f"**Model:** {result.get('model_info', 'Unknown')}")
             
             # Add some context
             if predicted_score > 100:
@@ -137,24 +135,10 @@ def main():
             
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Show word analysis
-            st.markdown("### Word Analysis")
-            words = title.lower().split()
-            known_words = [word for word in words if word in word_to_ix]
-            unknown_words = [word for word in words if word not in word_to_ix]
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Known Words:**")
-                for word in known_words:
-                    st.markdown(f"- {word}")
-            
-            with col2:
-                if unknown_words:
-                    st.markdown("**Unknown Words:**")
-                    for word in unknown_words:
-                        st.markdown(f"- {word}")
-                    st.warning("Some words weren't in our training data. This might affect the prediction.")
+            # Show API response details
+            with st.expander("🔍 Full API Response Details"):
+                st.json(result)
+                st.markdown("**This proves the Streamlit app is using your FastAPI backend!** 🎉")
             
         except Exception as e:
             st.error(f"Error making prediction: {str(e)}")
@@ -171,7 +155,7 @@ def main():
     
     # Add footer
     st.markdown("---")
-    st.markdown("Built with ❤️ using Streamlit and PyTorch")
+    st.markdown("Built with ❤️ using Streamlit and FastAPI")
 
 if __name__ == "__main__":
     main() 
