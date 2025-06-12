@@ -1,29 +1,21 @@
 version: '3.8'
 
 services:
-  # # ML Training Service
-  # ml_training:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.ml
-  #   container_name: mlx_training
-  #   environment:
-  #     - WANDB_API_KEY=${WANDB_API_KEY}
-  #     - CUDA_VISIBLE_DEVICES=0
-  #   volumes:
-  #     - ./data:/app/data
-  #     - ./models:/app/models
-  #     - ./logs:/app/logs
-  #     - ./wandb:/app/wandb
-  #   networks:
-  #     - mlx_network
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [gpu]
+  # ML Training Service
+  ml_training:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    container_name: mlx_training
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - mlx_network
+    command: python cbow.py
 
   # API Service
   api:
@@ -34,10 +26,11 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - .:/app
       - ./models:/app/models
-    # depends_on:
-    #   ml_training:
-    #     condition: service_completed_successfully
+    depends_on:
+      - ml_training
+
     networks:
       - mlx_network
 
@@ -49,11 +42,12 @@ services:
     container_name: mlx_streamlit
     ports:
       - "8501:8501"
+    volumes:
+      - .:/app
     environment:
       - API_URL=http://api:8000
     depends_on:
-      api:
-        condition: service_started
+      - api
     networks:
       - mlx_network
 

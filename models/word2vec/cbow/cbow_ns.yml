@@ -1,16 +1,16 @@
 # CBOW with Negative Sampling Hyperparameters
 
 # Dataset Parameters
-WINDOW_SIZE: 2
-NUM_NEGATIVES: 3
-BATCH_SIZE: 4
+WINDOW_SIZE: 4
+NUM_NEGATIVES: 15
+BATCH_SIZE: 4096
 
 # Model Parameters
-EMBEDDING_SIZE: 10
+EMBEDDING_SIZE: 128
 
 # Training Parameters
-LEARNING_RATE: 0.01
 NUM_EPOCHS: 20
+LEARNING_RATE: 0.001
 OPTIMIZER: "Adam"
 
 # Wandb Parameters
