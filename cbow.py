@@ -15,10 +15,20 @@ import json
 import gc  # For garbage collection
 import wandb
 from datetime import datetime
+from tqdm import tqdm  # Add tqdm import
 
-def make_context_vector(context, word_to_ix):
-    idxs = [word_to_ix[w] for w in context]
-    return torch.tensor(idxs, dtype=torch.long)
+# Check we have the wandb key in our env
+if 'WANDB_API_KEY' not in os.environ:
+    raise EnvironmentError("Please set the WANDB_API_KEY environment variable in your .env file before running this script.")
+# Initialize wandb
+wandb.login()  # Ensure to run source.env in terminal before running this script
+
+# Check it finds the gpu:
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+# Optional: speed up for fixed-size inputs
+torch.backends.cudnn.benchmark = True
+
 
 CONTEXT_SIZE = 4  # 2 words to the left, 2 to the right
 EMBEDDING_DIM = 8  # Reduced from 128
@@ -26,6 +36,14 @@ EPOCHS = 1
 BATCH_SIZE = 1024  # Process data in smaller batches
 ACCUMULATION_STEPS = 4  # Accumulate gradients over multiple batches
 LEARNING_RATE = 0.001
+MAX_BATCHES = 100  # Number of batches to process (1024 for full file)
+
+
+
+
+def make_context_vector(context, word_to_ix):
+    idxs = [word_to_ix[w] for w in context]
+    return torch.tensor(idxs, dtype=torch.long)
 
 # --- Configuration for file loading ---
 TEXT_FILE_PATH = os.path.join('data/', 'text8') # Path to your text file
@@ -106,7 +124,7 @@ wandb.init(
 )
 
 # Initialize model and training components
-model = CBOW(vocab_size, EMBEDDING_DIM)
+model = CBOW(vocab_size, EMBEDDING_DIM).to(device)
 loss_function = nn.NLLLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
 
@@ -126,8 +144,16 @@ for epoch in range(EPOCHS):
     # Shuffle data at the start of each epoch
     indices = torch.randperm(len(data))
     
+    # Calculate total number of batches to process
+    total_batches = min(MAX_BATCHES, len(data) // BATCH_SIZE + (1 if len(data) % BATCH_SIZE else 0))
+    
+    # Create progress bar for batches
+    pbar = tqdm(range(0, total_batches * BATCH_SIZE, BATCH_SIZE), 
+                desc=f'Epoch {epoch + 1}/{EPOCHS}',
+                total=total_batches * BATCH_SIZE)
+    
     # Process data in batches
-    for batch_start in range(0, len(data), BATCH_SIZE):
+    for batch_start in pbar:
         batch_end = min(batch_start + BATCH_SIZE, len(data))
         batch_indices = indices[batch_start:batch_end]
         
@@ -137,8 +163,8 @@ for epoch in range(EPOCHS):
         # Process each sample in the batch
         for idx in batch_indices:
             context, target = data[idx]
-            context_vector = make_context_vector(context, word_to_ix)
-            target_tensor = torch.tensor([word_to_ix[target]], dtype=torch.long)  # Add batch dimension and specify dtype
+            context_vector = make_context_vector(context, word_to_ix).to(device) # move to gpu
+            target_tensor = torch.tensor([word_to_ix[target]], dtype=torch.long).to(device) # move to gpu
 
             log_probs = model(context_vector)
             loss = loss_function(log_probs, target_tensor)
@@ -154,6 +180,19 @@ for epoch in range(EPOCHS):
         gc.collect()
         
         total_loss += batch_loss
+        
+        # Calculate average loss for this batch
+        avg_batch_loss = batch_loss / BATCH_SIZE
+        
+        # Update progress bar with current loss
+        pbar.set_postfix({'loss': f'{avg_batch_loss:.4f}'})
+        
+        # Print batch loss
+        print(f'\nBatch {batch_start//BATCH_SIZE + 1}/{total_batches}, Loss: {avg_batch_loss:.4f}')
+        
+        # Break if we've processed MAX_BATCHES
+        if (batch_start + BATCH_SIZE) // BATCH_SIZE >= MAX_BATCHES:
+            break
 
     # Calculate metrics
     avg_loss = total_loss / num_samples
@@ -235,7 +274,7 @@ print("="*50)
 
 # TESTING
 context = ['people','create','to', 'direct']
-context_vector = make_context_vector(context, word_to_ix)
+context_vector = make_context_vector(context, word_to_ix).to(device)
 a = model(context_vector)
 
 # Print result
@@ -256,6 +295,6 @@ wandb.finish()
 # print("First 5 rows of the full embedding matrix (representing the first 5 words in your vocab):")
 # print(model.embeddings.weight[:5].detach().numpy())
 
-print("\n" + "="*30 + "\n") # Separator for clarity
+# print("\n" + "="*30 + "\n") # Separator for clarity
 
-print(data)
+# print(data)
