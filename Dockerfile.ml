@@ -6,43 +6,21 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git \
-    wget \
-    curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements files
-COPY requirements_db.txt .
-COPY EDA/requirements.txt ./eda_requirements.txt
-COPY prediction/models/requirements.txt ./prediction_requirements.txt
+COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements_db.txt && \
-    pip install --no-cache-dir -r eda_requirements.txt && \
-    pip install --no-cache-dir -r prediction_requirements.txt && \
-    pip install --no-cache-dir \
-    torch torchvision torchaudio \
-    wandb \
-    tqdm \
-    matplotlib \
-    numpy \
-    pandas \
-    jupyter \
-    psycopg2-binary \
-    python-dotenv
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy the rest of the application
 COPY . .
-
-# Create necessary directories
-RUN mkdir -p /app/data /app/models /app/logs
 
 # Set environment variables
 ENV PYTHONPATH=/app
-ENV CUDA_VISIBLE_DEVICES=0
+ENV WANDB_API_KEY=${WANDB_API_KEY}
 
-# Expose port for potential API
-EXPOSE 8000
-
-# Default command (can be overridden)
-CMD ["python", "cbow.py"] 
+# Command to run the training script
+CMD ["python3", "cbow.py"] 
