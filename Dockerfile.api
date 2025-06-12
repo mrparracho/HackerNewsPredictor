@@ -1,0 +1,39 @@
+# API Service Dockerfile
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements_db.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements_db.txt && \
+    pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    torch \
+    numpy \
+    pandas \
+    python-dotenv
+
+# Copy only necessary files for API
+COPY prediction/ ./prediction/
+COPY word_to_lemma_index.json .
+COPY best_cbow_model.pth .
+COPY prediction/best_predictor.pth ./best_predictor.pth
+COPY prediction/predictor_info.json ./model_info.json
+
+# Create API service
+COPY api_service.py .
+
+# Expose API port
+EXPOSE 8000
+
+# Run API service
+CMD ["uvicorn", "api_service:app", "--host", "0.0.0.0", "--port", "8000"] 

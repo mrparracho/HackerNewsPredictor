@@ -30,6 +30,7 @@ services:
       - ./models:/app/models
     depends_on:
       - ml_training
+
     networks:
       - mlx_network
 
