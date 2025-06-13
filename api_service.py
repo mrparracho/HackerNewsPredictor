@@ -37,28 +37,39 @@ class PredictionResponse(BaseModel):
     api_source: str = "FastAPI Service"
     model_info: str = "CBOW + SimplePredictor"
 
-def process_title(title, word_to_ix, embeddings, embedding_dim=32):
-    """Process a title and create its embedding."""
+def create_title_embedding(title, word_to_ix, embeddings, embedding_dim=32):
+    """Create a title embedding using the same method as training."""
     words = title.lower().split()
     word_embeddings = []
     
     for word in words:
         if word in word_to_ix:
             word_ix = word_to_ix[word]
-            embedding = embeddings[word_ix].cpu().numpy()
-            word_embeddings.append(embedding)
+            # Check if word index is within bounds of the CBOW model
+            if word_ix < embeddings.shape[0]:
+                embedding = embeddings[word_ix].cpu().numpy()
+                word_embeddings.append(embedding)
+            else:
+                # Word index out of bounds, skip this word
+                print(f"⚠️ Word '{word}' (index {word_ix}) not in CBOW model (size {embeddings.shape[0]})")
+        else:
+            print(f"⚠️ Word '{word}' not in vocabulary")
     
     if not word_embeddings:
+        print("⚠️ No valid words found, using zero vector")
         return torch.zeros(embedding_dim, dtype=torch.float32)
     
+    # Average the word embeddings (same as training)
     title_embedding = np.mean(word_embeddings, axis=0)
     
-    # Ensure correct dimension (32)
+    # Ensure we have the right dimension (32) for the predictor
     if len(title_embedding) != embedding_dim:
         if len(title_embedding) < embedding_dim:
+            # Pad with zeros if CBOW embeddings are smaller
             padding = np.zeros(embedding_dim - len(title_embedding))
             title_embedding = np.concatenate([title_embedding, padding])
         else:
+            # Truncate if CBOW embeddings are larger
             title_embedding = title_embedding[:embedding_dim]
     
     return torch.tensor(title_embedding, dtype=torch.float32)
@@ -69,20 +80,21 @@ async def load_models():
     global predictor, embeddings, word_to_ix, model_loaded
     
     try:
-        # Load word to index mapping
-        with open('word_to_lemma_index.json', 'r') as f:
-            word_to_ix = json.load(f)
+        # Load CBOW model and its word mapping
+        cbow_checkpoint = torch.load('models/word2vec/cbow/checkpoints/cbow_model.pt')
+        word_to_ix = cbow_checkpoint.get('word_to_lemma_index', {})
         
-        # Load CBOW embeddings
-        embeddings = load_cbow_embeddings('best_cbow_model.pth')
+        # Load CBOW embeddings (needed to create title embeddings)
+        embeddings = load_cbow_embeddings('models/word2vec/cbow/checkpoints/cbow_model.pt')
         
-        # Load the predictor model
+        # Load the trained predictor model
         predictor = SimplePredictor(input_dim=32)
         checkpoint = torch.load('prediction/best_predictor.pth', map_location='cpu')
         predictor.load_state_dict(checkpoint['model_state_dict'])
         predictor.eval()
         model_loaded = True
         print("✅ Models loaded successfully")
+        print(f"📚 Using CBOW vocabulary with {len(word_to_ix)} words")
             
     except Exception as e:
         print(f"❌ Error loading models: {e}")
@@ -106,11 +118,11 @@ async def predict_score(request: PredictionRequest):
     print(f"🔍 API received request for title: '{request.title}'")
     
     try:
-        # Process the title
-        title_vector = process_title(request.title, word_to_ix, embeddings)
-        print(f"📊 Processed title vector shape: {title_vector.shape}")
+        # Create title embedding using the same method as training
+        title_vector = create_title_embedding(request.title, word_to_ix, embeddings)
+        print(f"📊 Created title vector shape: {title_vector.shape}")
         
-        # Make prediction
+        # Use the trained predictor model
         with torch.no_grad():
             predicted_score = predictor(title_vector)
             score_value = predicted_score.item()

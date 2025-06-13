@@ -25,9 +25,10 @@ RUN pip install --no-cache-dir -r requirements_db.txt && \
 # Copy only necessary files for API
 COPY prediction/ ./prediction/
 COPY word_to_lemma_index.json .
-COPY best_cbow_model.pth .
+# COPY best_cbow_model.pth .
 COPY prediction/best_predictor.pth ./best_predictor.pth
 COPY prediction/predictor_info.json ./model_info.json
+COPY models/word2vec/cbow/checkpoints/cbow_model.pt models/word2vec/cbow/checkpoints/cbow_model.pt
 
 # Create API service
 COPY api_service.py .

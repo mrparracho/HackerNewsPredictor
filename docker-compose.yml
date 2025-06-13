@@ -2,20 +2,20 @@ version: '3.8'
 
 services:
   # ML Training Service
-  ml_training:
-    build:
-      context: .
-      dockerfile: Dockerfile.ml
-    container_name: mlx_training
-    env_file:
-      - .env
-    volumes:
-      - .:/app
-      - ./data:/app/data
-      - ./models:/app/models
-    networks:
-      - mlx_network
-    command: python cbow.py
+  # ml_training:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.ml
+  #   container_name: mlx_training
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - .:/app
+  #     - ./data:/app/data
+  #     - ./models:/app/models
+  #   networks:
+  #     - mlx_network
+  #   command: python cbow.py
 
   # API Service
   api:
@@ -28,8 +28,8 @@ services:
     volumes:
       - .:/app
       - ./models:/app/models
-    depends_on:
-      - ml_training
+    # depends_on:
+    #   - ml_training
 
     networks:
       - mlx_network
@@ -52,22 +52,22 @@ services:
       - mlx_network
 
   # Jupyter Notebook Service (Optional)
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile.ml
-    container_name: mlx_jupyter
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./EDA:/app/EDA
-      - ./data:/app/data
-      - ./models:/app/models
-    networks:
-      - mlx_network
-    command: ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
-    profiles:
-      - development
+  # jupyter:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.ml
+  #   container_name: mlx_jupyter
+  #   ports:
+  #     - "8888:8888"
+  #   volumes:
+  #     - ./EDA:/app/EDA
+  #     - ./data:/app/data
+  #     - ./models:/app/models
+  #   networks:
+  #     - mlx_network
+  #   command: ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
+  #   profiles:
+  #     - development
 
 networks:
   mlx_network:

@@ -63,7 +63,6 @@ README.md
 
 # Large data files (will be mounted as volumes)
 data/
-models/
 wandb/
 logs/
 

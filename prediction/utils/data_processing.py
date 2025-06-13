@@ -14,7 +14,7 @@ def load_cbow_embeddings(model_path: str):
     """
     print(f"\n[Embedding Load] Loading embeddings from {model_path}")
     checkpoint = torch.load(model_path)
-    embeddings = checkpoint['model_state_dict']['embeddings.weight']
+    embeddings = checkpoint['model_state_dict']['in_embed.weight']
     # Move to CPU before converting to numpy
     embeddings = embeddings.cpu()
     print(f"[Embedding Load] Loaded embeddings with shape: {embeddings.shape}")
