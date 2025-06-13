@@ -18,4 +18,4 @@ PROJECT_NAME: "word2vec-cbow-ns"
 RUN_NAME: "cbow-tqdm-wandb"
 
 # Inference Parameters
-TOP_K_PREDICTIONS: 3
+TOP_K_PREDICTIONS: 4
