@@ -34,6 +34,8 @@ def create_title_embeddings(data_path: str, word_to_ix: dict, embeddings, embedd
     Returns:
         tuple: (title_embeddings, scores)
     """
+    embedding_dim = embeddings.shape[1]   # override the default 128
+
     print(f"\n[Embedding Creation] Starting with max_samples={max_samples if max_samples else 'all'}")
     with open(data_path, 'r') as f:
         data = json.load(f)
@@ -51,7 +53,11 @@ def create_title_embeddings(data_path: str, word_to_ix: dict, embeddings, embedd
             print(f"[Embedding Creation] Processing item {i+1}/{len(data)}")
             
         title = item['Title'].lower().split()
-        score = float(item['score'])
+        # get score from 'score' or 'Score' key
+        raw_score = item.get('score')
+        if raw_score is None:
+            raw_score = item.get('Score', 0)      # default to 0 if neither exists
+        score = float(raw_score)
         
         # Get embeddings for each word
         word_embeddings = []

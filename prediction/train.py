@@ -30,6 +30,7 @@ def main():
     try:
         cbow_model_path = os.path.join(parent_dir, 'models/word2vec/cbow/checkpoints/cbow_model.pt')
         embeddings = load_cbow_embeddings(cbow_model_path)
+        embedding_dim = embeddings.shape[1]  # Get the dimension of the embeddings
         print("[Main] CBOW embeddings loaded successfully")
     except Exception as e:
         print(f"[Main] Error loading CBOW embeddings: {e}")
@@ -37,7 +38,7 @@ def main():
     
     # Load the data for titles
     print("\n[Main] Loading data for titles...")
-    data_path = os.path.join(parent_dir, 'hn_data_cleaned.json')
+    data_path = os.path.join(parent_dir, 'data/hn_data_cleaned.json')
     with open(data_path, 'r') as f:
         data = json.load(f)
     
@@ -70,7 +71,11 @@ def main():
     
     # Initialize and train model
     print("\n[Main] Initializing model...")
-    model = SimplePredictor(input_dim=128)
+    model = SimplePredictor(
+             input_dim=embedding_dim,
+        # hidden_dim=cfg.HIDDEN_DIM,    # if you swept hidden_dim
+         #dropout=cfg.DROPOUT           # if you swept dropout
+         )
     print("[Main] Starting training process...")
     train_model(model, train_loader, test_loader, full_dataset, num_epochs=50)
     
