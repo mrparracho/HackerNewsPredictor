@@ -2,8 +2,8 @@
 
 # Sweep Hyperparameters  ← now lists!
 LEARNING_RATE:
-  - 0.0001
   - 0.001
+  - 0.0001
   - 0.01
 EMBEDDING_SIZE:
   - 256
@@ -17,7 +17,7 @@ NUM_NEGATIVES: 15
 BATCH_SIZE: 4096
 
 # Training Parameters
-NUM_EPOCHS: 20
+NUM_EPOCHS: 1
 OPTIMIZER: "Adam"
 
 # Wandb Parameters
