@@ -62,7 +62,8 @@ README.md
 *.md
 
 # Large data files (will be mounted as volumes)
-data/
+data/*
+!data/combined_word_to_lemma_index.json
 wandb/
 logs/
 
