@@ -7,12 +7,41 @@ import os
 import json
 import argparse
 import sys
+import itertools
+
+import torch.nn.functional as F
+from scipy.stats import spearmanr
+# from sklearn.manifold import TSNE
+# import matplotlib.pyplot as plt
 
 # Add the project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 from model import CBOWNS, CBOWNegativeSamplingDataset
+
+# load YAML config defaults (some keys are lists for sweep)
+def load_yaml_config(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+# find which keys are lists → sweep axes
+def get_sweep_keys(cfg):
+    return [k for k, v in cfg.items() if isinstance(v, list)]
+
+# from defaults+axes build each run’s flat config
+def generate_configs(defaults, sweep_keys):
+    if not sweep_keys:
+        return [defaults]
+    values = [defaults[k] for k in sweep_keys]
+    combos = itertools.product(*values)
+    runs = []
+    for combo in combos:
+        c = defaults.copy()
+        for k, v in zip(sweep_keys, combo):
+            c[k] = v
+        runs.append(c)
+    return runs
 
 def load_vocabulary():
     """Load the combined vocabulary from our ETL pipeline."""
@@ -54,10 +83,6 @@ def get_training_data(word_to_index):
     print(f"Loaded {len(encoded):,} words")
     return encoded
 
-import torch.nn.functional as F
-from scipy.stats import spearmanr
-# from sklearn.manifold import TSNE
-# import matplotlib.pyplot as plt
 
 def evaluate_model(model, step, word_to_ix, embedding_layer=None):
     """
@@ -118,21 +143,17 @@ def evaluate_model(model, step, word_to_ix, embedding_layer=None):
 
     # log_tsne()
 
-def train(dummy=False):
+def train_run(dummy=False):
     """
     Train the CBOW model.
     """
-    # Load hyperparameters from YAML file
-    with open('models/word2vec/cbow/cbow_ns.yml', 'r') as file:
-        config = yaml.safe_load(file)
-
     # Create checkpoints directory if it doesn't exist
     checkpoint_dir = 'models/word2vec/cbow/checkpoints'
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # Initialize wandb
-    wandb.init(project=config['PROJECT_NAME'], name=config['RUN_NAME'])
-    
+    # grab merged config (defaults + sweep overrides)
+    cfg = wandb.config
+
     if dummy:
         print("Using dummy vocabulary for testing...")
         word_to_index, word_to_lemma_index = get_dummy_vocabulary()
@@ -157,18 +178,18 @@ def train(dummy=False):
     # Create dataset and dataloader
     dataset = CBOWNegativeSamplingDataset(
         encoded, 
-        window_size=config['WINDOW_SIZE'], 
-        num_negatives=config['NUM_NEGATIVES']
+        window_size=cfg.WINDOW_SIZE, 
+        num_negatives=cfg.NUM_NEGATIVES,
     )
-    loader = DataLoader(dataset, batch_size=config['BATCH_SIZE'], shuffle=True)
+    loader = DataLoader(dataset, batch_size=cfg.BATCH_SIZE, shuffle=True)
 
     # Initialize model and optimizer
-    model = CBOWNS(vocab_size, embed_size=config['EMBEDDING_SIZE'])
-    opt = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE'])
+    model = CBOWNS(vocab_size, embed_size=cfg.EMBEDDING_SIZE)
+    opt = torch.optim.Adam(model.parameters(), lr=cfg.LEARNING_RATE)
 
     # Training loop
     best_loss = float('inf')
-    for epoch in range(config['NUM_EPOCHS']):
+    for epoch in range(cfg.NUM_EPOCHS):
         total_loss = 0
         pbar = tqdm(loader, desc=f"Epoch {epoch+1}", unit="batch")
         for batch_idx, (context, target, negatives) in enumerate(pbar):
@@ -224,9 +245,37 @@ def train(dummy=False):
     wandb.finish()
     return model, word_to_index
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train CBOW model')
-    parser.add_argument('--dummy', action='store_true', help='Use dummy vocabulary for testing', default=False)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Train CBOW or run embedded hyper-parameter sweep"
+    )
+    parser.add_argument(
+        '--dummy',
+        action='store_true',
+        help='Use dummy vocabulary for testing',
+        default=False
+    )
     args = parser.parse_args()
-    
-    train(dummy=args.dummy)
+
+    # 1. load your YAML (with list-valued sweep keys)
+    defaults = load_yaml_config('models/word2vec/cbow/cbow_ns.yml')
+    sweep_keys = get_sweep_keys(defaults)
+    all_cfgs   = generate_configs(defaults, sweep_keys)
+
+    # 2. for each combo: init W&B, run train_run()
+    for cfg in all_cfgs:
+        if sweep_keys:
+            suffix   = "_".join(f"{k}{cfg[k]}" for k in sweep_keys)
+            run_name = f"{defaults['RUN_NAME']}_{suffix}"
+        else:
+            run_name = defaults['RUN_NAME']
+
+        wandb.init(
+            project=cfg['PROJECT_NAME'],
+            name=run_name,
+            config=cfg
+        )
+        train_run(dummy=args.dummy)
+
+if __name__ == "__main__":
+    main()

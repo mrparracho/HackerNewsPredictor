@@ -1,21 +1,28 @@
 # CBOW with Negative Sampling Hyperparameters
 
+# Sweep Hyperparameters  ← now lists!
+LEARNING_RATE:
+  - 0.0001
+  - 0.001
+  - 0.01
+EMBEDDING_SIZE:
+  - 256
+  - 128
+WINDOW_SIZE:
+  - 4
+  - 8
+
 # Dataset Parameters
-WINDOW_SIZE: 4
 NUM_NEGATIVES: 15
 BATCH_SIZE: 4096
 
-# Model Parameters
-EMBEDDING_SIZE: 128
-
 # Training Parameters
 NUM_EPOCHS: 20
-LEARNING_RATE: 0.001
 OPTIMIZER: "Adam"
 
 # Wandb Parameters
 PROJECT_NAME: "word2vec-cbow-ns"
-RUN_NAME: "cbow-tqdm-wandb"
+RUN_NAME: "cbow-sweep-run"
 
 # Inference Parameters
 TOP_K_PREDICTIONS: 4
