@@ -194,6 +194,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# our custom files
 .DS_Store
 .wandb
 wandb/
@@ -204,3 +205,9 @@ models/word2vec/cbow/checkpoints/
 *.ckpt
 *.bin
 *.model
+
+# CBOW checkpoints (we don’t want to version‐control large binaries)
+models/word2vec/cbow/checkpoints/
+
+# Local predictor info file
+predictor_info.json
