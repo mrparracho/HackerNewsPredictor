@@ -20,7 +20,7 @@ def main():
     
     # Load word to index mapping
     print("\n[Main] Loading word to index mapping...")
-    word_to_ix_path = os.path.join(parent_dir, 'word_to_lemma_index.json')
+    word_to_ix_path = os.path.join(parent_dir, 'data/combined_word_to_lemma_index.json')
     with open(word_to_ix_path, 'r') as f:
         word_to_ix = json.load(f)
     print(f"[Main] Loaded {len(word_to_ix)} word mappings")
@@ -28,7 +28,7 @@ def main():
     # Load CBOW embeddings
     print("\n[Main] Loading CBOW embeddings...")
     try:
-        cbow_model_path = os.path.join(parent_dir, 'best_cbow_model.pth')
+        cbow_model_path = os.path.join(parent_dir, 'models/word2vec/cbow/checkpoints/cbow_model.pt')
         embeddings = load_cbow_embeddings(cbow_model_path)
         print("[Main] CBOW embeddings loaded successfully")
     except Exception as e:
@@ -70,7 +70,7 @@ def main():
     
     # Initialize and train model
     print("\n[Main] Initializing model...")
-    model = SimplePredictor(input_dim=32)
+    model = SimplePredictor(input_dim=128)
     print("[Main] Starting training process...")
     train_model(model, train_loader, test_loader, full_dataset, num_epochs=50)
     
