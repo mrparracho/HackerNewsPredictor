@@ -148,8 +148,14 @@ def train_run(dummy=False):
     Train the CBOW model.
     """
     # Create checkpoints directory if it doesn't exist
-    checkpoint_dir = 'models/word2vec/cbow/checkpoints'
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    base_ckpt_dir = "models/word2vec/cbow/checkpoints"
+    run_ckpt_dir = os.path.join(base_ckpt_dir, "cur_sweep")
+    # clear out stuff from the last run in the temp folder so this run has a blank slate
+    for f in os.listdir(run_ckpt_dir):
+        os.remove(os.path.join(run_ckpt_dir, f))
+    os.makedirs(run_ckpt_dir, exist_ok=True)
+    # path to file which tracks the best loss across training runs within hyperparameter sweep
+    best_loss_path = os.path.join(base_ckpt_dir, "best_loss.txt")
 
     # grab merged config (defaults + sweep overrides)
     cfg = wandb.config
@@ -188,7 +194,7 @@ def train_run(dummy=False):
     opt = torch.optim.Adam(model.parameters(), lr=cfg.LEARNING_RATE)
 
     # Training loop
-    best_loss = float('inf')
+    best_loss: float = float("inf") # track best loss across epochs
     for epoch in range(cfg.NUM_EPOCHS):
         total_loss = 0
         pbar = tqdm(loader, desc=f"Epoch {epoch+1}", unit="batch")
@@ -198,84 +204,122 @@ def train_run(dummy=False):
             loss.backward()
             opt.step()
             total_loss += loss.item()
-            
+
             # Log batch loss to wandb
             wandb.log({
-                "epoch": epoch + 1, 
+                "epoch": epoch + 1,
                 "batch": batch_idx,
-                "batch_loss": loss.item()
+                "batch_loss": loss.item(),
             })
-            
-            # Evaluate model periodically
+
+            # Evaluate periodically
             if batch_idx % 100 == 0:
                 evaluate_model(model, batch_idx + epoch * len(loader), word_to_index)
-            
+
             pbar.set_postfix(loss=loss.item())
-        
+
         avg_loss = total_loss / len(loader)
         wandb.log({
             "epoch": epoch + 1,
-            "epoch_loss": avg_loss
+            "epoch_loss": avg_loss,
         })
 
-        # Save best model
+        # if this epoch is the best so far, save into the run's subdir
         if avg_loss < best_loss:
             best_loss = avg_loss
-            # Save model state
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': opt.state_dict(),
-                'loss': best_loss,
-                'word_to_index': word_to_index,
-                'word_to_lemma_index': word_to_lemma_index
-            }, os.path.join(checkpoint_dir, 'cbow_model.pt'))
-            
-            # Save embeddings
-            torch.save(model.in_embed.weight.data, os.path.join(checkpoint_dir, 'cbow_input_embeddings.pt'))
-            torch.save(model.out_embed.weight.data, os.path.join(checkpoint_dir, 'cbow_output_embeddings.pt'))
 
-            # Save as readable text file
-            with open(os.path.join(checkpoint_dir, 'cbow_input_embeddings.txt'), "w", encoding='utf-8') as f:
+            # model checkpoint
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": opt.state_dict(),
+                    "loss": best_loss,
+                    "word_to_index": word_to_index,
+                    "word_to_lemma_index": word_to_lemma_index,
+                },
+                os.path.join(run_ckpt_dir, "cbow_model.pt"),
+            )
+            # embeddings
+            torch.save(
+                model.in_embed.weight.data,
+                os.path.join(run_ckpt_dir, "cbow_input_embeddings.pt"),
+            )
+            torch.save(
+                model.out_embed.weight.data,
+                os.path.join(run_ckpt_dir, "cbow_output_embeddings.pt"),
+            )
+            # readable embeddings
+            with open(os.path.join(run_ckpt_dir, "cbow_input_embeddings.txt"), "w", encoding="utf-8") as f:
                 for word, idx in word_to_index.items():
                     vector = model.in_embed.weight[idx].tolist()
                     vector_str = " ".join(f"{v:.4f}" for v in vector)
                     f.write(f"{word} {vector_str}\n")
 
+    # after all epochs: record this run's best loss
+    run_loss_file = os.path.join(run_ckpt_dir, "run_best_loss.txt")
+    with open(run_loss_file, "w", encoding="utf-8") as f:
+        f.write(f"{best_loss}")
+
+    # compare against the global best and promote if better
+    try:
+        with open(best_loss_path, "r", encoding="utf-8") as f:
+            global_best = float(f.read())
+    except FileNotFoundError:
+        global_best = float("inf")
+
+    if best_loss < global_best:
+        import shutil
+
+        for fname in [
+            "cbow_model.pt",
+            "cbow_input_embeddings.pt",
+            "cbow_output_embeddings.pt",
+            "cbow_input_embeddings.txt",
+        ]:
+            shutil.copy(
+                os.path.join(run_ckpt_dir, fname),
+                os.path.join(base_ckpt_dir, fname),
+            )
+        # overwrite the global best‐loss record
+        with open(best_loss_path, "w", encoding="utf-8") as f:
+            f.write(f"{best_loss}")
+
     wandb.finish()
     return model, word_to_index
+
 
 def main():
     parser = argparse.ArgumentParser(
         description="Train CBOW or run embedded hyper-parameter sweep"
     )
     parser.add_argument(
-        '--dummy',
-        action='store_true',
-        help='Use dummy vocabulary for testing',
-        default=False
+        "--dummy",
+        action="store_true",
+        help="Use dummy vocabulary for testing",
+        default=False,
     )
     args = parser.parse_args()
 
-    # 1. load your YAML (with list-valued sweep keys)
-    defaults = load_yaml_config('models/word2vec/cbow/cbow_ns.yml')
+    defaults = load_yaml_config("models/word2vec/cbow/cbow_ns.yml")
     sweep_keys = get_sweep_keys(defaults)
-    all_cfgs   = generate_configs(defaults, sweep_keys)
+    all_cfgs = generate_configs(defaults, sweep_keys)
 
-    # 2. for each combo: init W&B, run train_run()
     for cfg in all_cfgs:
         if sweep_keys:
-            suffix   = "_".join(f"{k}{cfg[k]}" for k in sweep_keys)
+            suffix = "_".join(f"{k}{cfg[k]}" for k in sweep_keys)
             run_name = f"{defaults['RUN_NAME']}_{suffix}"
         else:
-            run_name = defaults['RUN_NAME']
+            run_name = defaults["RUN_NAME"]
 
         wandb.init(
-            project=cfg['PROJECT_NAME'],
+            project=cfg["PROJECT_NAME"],
             name=run_name,
-            config=cfg
+            config=cfg,
         )
         train_run(dummy=args.dummy)
+
+
 
 if __name__ == "__main__":
     main()
