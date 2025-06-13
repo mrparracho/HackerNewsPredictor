@@ -20,7 +20,7 @@ def load_cbow_embeddings(model_path: str):
     print(f"[Embedding Load] Loaded embeddings with shape: {embeddings.shape}")
     return embeddings
 
-def create_title_embeddings(data_path: str, word_to_ix: dict, embeddings, embedding_dim=32, max_samples=None):
+def create_title_embeddings(data_path: str, word_to_ix: dict, embeddings, embedding_dim=128, max_samples=None):
     """
     Pre-compute embeddings for all titles using pre-trained embeddings.
     
