@@ -211,3 +211,5 @@ models/word2vec/cbow/checkpoints/
 
 # Local predictor info file
 predictor_info.json
+
+data/*

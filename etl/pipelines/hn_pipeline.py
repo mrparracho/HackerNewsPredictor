@@ -15,47 +15,49 @@ class HNPipeline(BasePipeline):
         self.limit = limit
 
     def get_data(self) -> str:
-        """Get HN data from database and save to file if not exists."""
-        if not os.path.exists(self.hn_data_path):
-            print("Fetching HN data from database...")
-            # Get raw data
-            results = self.db_processor.get_hn_data(limit=self.limit)
-            
-            # Process the raw data
-            processed_posts = self.db_processor.process_hn_data(results)
-            
-            # Save processed posts with scores to JSON
-            json_path = os.path.join(os.path.dirname(self.hn_data_path), "hn_data_cleaned.json")
-            print(f"[DEBUG] Writing processed posts with scores to: {json_path}")
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(processed_posts, f, indent=2, ensure_ascii=False)
-            print(f"[DEBUG] Finished writing JSON file: {json_path}")
-            
-            # Create massive string
-            massive_string = []
-            for post in processed_posts:
-                # Add title
-                massive_string.append(post['Title'])
-                
-                # Add content if not URL
-                if post['Content'] and not post['Content'].startswith('http'):
-                    massive_string.append(post['Content'])
-                
-                # Add comments
-                if post['Comments']:
-                    for comment in post['Comments']:
-                        massive_string.append(comment)
-                
-                # Add separator
-                massive_string.append("\n" + "="*80 + "\n")
-            
-            # Save to file
-            os.makedirs(os.path.dirname(self.hn_data_path), exist_ok=True)
-            with open(self.hn_data_path, 'w', encoding='utf-8') as f:
-                f.write("\n".join(massive_string))
-            
-            print("Data saved to file.")
+        """Get HN data from database and save to file."""
+        print("Fetching HN data from multiple tables...")
+        # Get raw data
+        results = self.db_processor.get_hn_data(limit=self.limit)
+        print(f"Total rows fetched: {len(results)}")
         
+        # Save raw data to JSON first
+        raw_json_path = os.path.join(os.path.dirname(self.hn_data_path), "hn_data_raw.json")
+        self.db_processor.save_raw_data_to_json(results, raw_json_path)
+        print(f"Raw data saved to: {raw_json_path}")
+        
+        # Process the raw data
+        processed_posts = self.db_processor.process_hn_data(results)
+        print(f"Processed {len(processed_posts)} posts")
+        
+        # Save processed posts with scores to JSON
+        json_path = os.path.join(os.path.dirname(self.hn_data_path), "hn_data_cleaned.json")
+        print(f"[DEBUG] Writing processed posts with scores to: {json_path}")
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(processed_posts, f, indent=2, ensure_ascii=False)
+        print(f"[DEBUG] Finished writing JSON file: {json_path}")
+        
+        # Create massive string
+        massive_string = []
+        for post in processed_posts:
+            # Add title
+            massive_string.append(post['Title'])
+            
+            # Add content if not URL
+            if post['Content'] and not post['Content'].startswith('http'):
+                massive_string.append(post['Content'])
+            
+            # Add comments
+            if post['Comments']:
+                for comment in post['Comments']:
+                    massive_string.append(comment)
+        
+        # Save to file
+        os.makedirs(os.path.dirname(self.hn_data_path), exist_ok=True)
+        with open(self.hn_data_path, 'w', encoding='utf-8') as f:
+            f.write(" ".join(massive_string))
+        
+        print("Data saved to file.")
         return self.hn_data_path
 
     def process_chunk(self, chunk: str) -> Tuple[int, Counter]:
@@ -83,4 +85,5 @@ class HNPipeline(BasePipeline):
         # Save results
         self.save_results(word_to_index, word_to_lemma_index, "hn")
         
-        return word_to_index, word_to_lemma_index 
+        return word_to_index, word_to_lemma_index
+    

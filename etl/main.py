@@ -2,6 +2,7 @@ import os
 from typing import Dict, Tuple
 from .pipelines.wiki_pipeline import WikiPipeline
 from .pipelines.hn_pipeline import HNPipeline
+from .processors.text_processor import TextProcessor
 import json
 
 def merge_vocabularies(
@@ -60,8 +61,8 @@ def merge_text_data(output_dir: str, combined_word_to_index: Dict[str, int]) -> 
     with open(os.path.join(output_dir, 'hn_data.txt'), 'r', encoding='utf-8') as f:
         hn_text = f.read()
     
-    # Combine texts with a special separator
-    combined_text = f"{wiki_text}\n\n=== HN DATA ===\n\n{hn_text}"
+    # Combine texts with a space
+    combined_text = f"{wiki_text} {hn_text}"
     
     # Save combined text
     with open(os.path.join(output_dir, 'combined_data.txt'), 'w', encoding='utf-8') as f:
@@ -88,8 +89,8 @@ def main():
     wiki_word_to_index, wiki_word_to_lemma_index = wiki_pipeline.run(num_threads=4)
     
     # Run HN pipeline with 10000 row limit
-    print("\nRunning HN pipeline (10000 row limit)...")
-    hn_pipeline = HNPipeline(output_dir, limit=10000)
+    print("\nRunning HN pipeline (100000 row limit)...")
+    hn_pipeline = HNPipeline(output_dir, limit=100000)
     hn_word_to_index, hn_word_to_lemma_index = hn_pipeline.run(num_threads=4)
     
     # Merge vocabularies

@@ -10,6 +10,7 @@ import html
 import re
 import string
 from collections import Counter
+import unicodedata
 
 # Download required NLTK resources
 nltk.download('punkt', quiet=True)
@@ -32,12 +33,181 @@ class TextProcessor:
             'R': 'r'   # adverb
         }
 
+    def normalize_text(self, text: str) -> str:
+        """Normalize text by converting special characters to their closest ASCII equivalent."""
+        if not isinstance(text, str):
+            return text
+        
+        # First, normalize Unicode characters
+        text = unicodedata.normalize('NFKD', text)
+        
+        # Convert to ASCII, ignoring non-ASCII characters
+        text = text.encode('ascii', 'ignore').decode('ascii')
+        
+        # Replace common special characters with their ASCII equivalents
+        replacements = {
+            '"': '"',
+            '"': '"',
+            ''': "'",
+            ''': "'",
+            '–': '-',
+            '—': '-',
+            '…': '...',
+            '→': '->',
+            '←': '<-',
+            '↑': '^',
+            '↓': 'v',
+            '±': '+/-',
+            '×': 'x',
+            '÷': '/',
+            '©': '(c)',
+            '®': '(r)',
+            '™': '(tm)',
+            '€': 'EUR',
+            '£': 'GBP',
+            '¥': 'JPY',
+            '°': ' degrees',
+            '²': '2',
+            '³': '3',
+            'µ': 'u',
+            '¶': 'P',
+            '·': '.',
+            '¹': '1',
+            '¼': '1/4',
+            '½': '1/2',
+            '¾': '3/4',
+            '×': 'x',
+            '÷': '/',
+            '≠': '!=',
+            '≤': '<=',
+            '≥': '>=',
+            '≈': '~=',
+            '∞': 'inf',
+            '±': '+/-',
+            '∑': 'sum',
+            '∏': 'prod',
+            '√': 'sqrt',
+            '∫': 'integral',
+            '∆': 'delta',
+            '∇': 'nabla',
+            '∂': 'partial',
+            '∝': 'propto',
+            '∞': 'inf',
+            '∅': 'empty',
+            '∈': 'in',
+            '∉': 'not in',
+            '∋': 'contains',
+            '∌': 'not contains',
+            '⊂': 'subset',
+            '⊃': 'superset',
+            '⊆': 'subset or equal',
+            '⊇': 'superset or equal',
+            '⊕': 'xor',
+            '⊗': 'tensor',
+            '⊥': 'perp',
+            '⊤': 'top',
+            '⊢': 'proves',
+            '⊨': 'models',
+            '⊩': 'forces',
+            '⊪': 'double turnstile',
+            '⊫': 'double turnstile',
+            '⊬': 'does not prove',
+            '⊭': 'does not model',
+            '⊮': 'does not force',
+            '⊯': 'does not double turnstile',
+            '⊰': 'precedes under relation',
+            '⊱': 'succeeds under relation',
+            '⊲': 'normal subgroup of',
+            '⊳': 'contains as normal subgroup',
+            '⊴': 'normal subgroup of or equal to',
+            '⊵': 'contains as normal subgroup or equal to',
+            '⊶': 'original of',
+            '⊷': 'image of',
+            '⊸': 'multimap',
+            '⊹': 'hermitian conjugate matrix',
+            '⊺': 'intercalate',
+            '⊻': 'xor',
+            '⊼': 'nand',
+            '⊽': 'nor',
+            '⊾': 'right angle with arc',
+            '⊿': 'right triangle',
+            '⋀': 'n-ary logical and',
+            '⋁': 'n-ary logical or',
+            '⋂': 'n-ary intersection',
+            '⋃': 'n-ary union',
+            '⋄': 'diamond operator',
+            '⋅': 'dot operator',
+            '⋆': 'star operator',
+            '⋇': 'division times',
+            '⋈': 'bowtie',
+            '⋉': 'left normal factor semidirect product',
+            '⋊': 'right normal factor semidirect product',
+            '⋋': 'left semidirect product',
+            '⋌': 'right semidirect product',
+            '⋍': 'reversed tilde equals',
+            '⋎': 'curly logical or',
+            '⋏': 'curly logical and',
+            '⋐': 'double subset',
+            '⋑': 'double superset',
+            '⋒': 'double intersection',
+            '⋓': 'double union',
+            '⋔': 'pitchfork',
+            '⋕': 'equal and parallel to',
+            '⋖': 'less than with dot',
+            '⋗': 'greater than with dot',
+            '⋘': 'very much less than',
+            '⋙': 'very much greater than',
+            '⋚': 'less than equal to or greater than',
+            '⋛': 'greater than equal to or less than',
+            '⋜': 'equal to or less than',
+            '⋝': 'equal to or greater than',
+            '⋞': 'equal to or precedes',
+            '⋟': 'equal to or succeeds',
+            '⋠': 'does not precede or equal',
+            '⋡': 'does not succeed or equal',
+            '⋢': 'not square image of or equal to',
+            '⋣': 'not square original of or equal to',
+            '⋤': 'square image of or not equal to',
+            '⋥': 'square original of or not equal to',
+            '⋦': 'less than but not equivalent to',
+            '⋧': 'greater than but not equivalent to',
+            '⋨': 'precedes but not equivalent to',
+            '⋩': 'succeeds but not equivalent to',
+            '⋪': 'not normal subgroup of',
+            '⋫': 'does not contain as normal subgroup',
+            '⋬': 'not normal subgroup of or equal to',
+            '⋭': 'does not contain as normal subgroup or equal',
+            '⋮': 'vertical ellipsis',
+            '⋯': 'midline horizontal ellipsis',
+            '⋰': 'up right diagonal ellipsis',
+            '⋱': 'down right diagonal ellipsis',
+            '⋲': 'element of with long horizontal stroke',
+            '⋳': 'element of with vertical bar at end of horizontal stroke',
+            '⋴': 'small element of with vertical bar at end of horizontal stroke',
+            '⋵': 'element of with dot above',
+            '⋶': 'element of with overbar',
+            '⋷': 'small element of with overbar',
+            '⋸': 'element of with underbar',
+            '⋹': 'element of with two horizontal strokes',
+            '⋺': 'contains with long horizontal stroke',
+            '⋻': 'contains with vertical bar at end of horizontal stroke',
+            '⋼': 'small contains with vertical bar at end of horizontal stroke',
+            '⋽': 'contains with overbar',
+            '⋾': 'small contains with overbar',
+            '⋿': 'z notation bag membership',
+        }
+        
+        for special, replacement in replacements.items():
+            text = text.replace(special, replacement)
+        
+        return text
+
     def clean_text(self, text: str) -> str:
         """
         Comprehensive text cleaning:
         1. Convert HTML entities to Unicode
         2. Convert Unicode escape sequences
-        3. Remove HTML tags
+        3. Remove HTML tags and their content
         4. Convert to lowercase
         5. Remove URLs
         6. Remove punctuation and special characters
@@ -47,31 +217,71 @@ class TextProcessor:
         if not text:
             return ""
         
+        # First normalize the text to handle special characters
+        text = self.normalize_text(text)
+        
         # Convert HTML entities to Unicode
         text = html.unescape(text)
         
         # Convert Unicode escape sequences
-        text = text.encode('utf-8').decode('unicode-escape')
+        try:
+            text = text.encode('utf-8').decode('unicode-escape')
+        except UnicodeError:
+            # If decoding fails, try to clean the text directly
+            text = text.encode('utf-8', errors='ignore').decode('utf-8')
         
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
+        # Remove HTML tags and their content (more aggressive)
+        # First remove complete tags with content
+        text = re.sub(r'<[^>]*>.*?</[^>]*>', ' ', text)  # Add space after removing tags
+        # Then remove any remaining tags
+        text = re.sub(r'<[^>]+>', ' ', text)  # Add space after removing tags
+        # Remove any remaining HTML entities
+        text = re.sub(r'&[a-zA-Z]+;', ' ', text)  # Add space after removing entities
+        text = re.sub(r'&#[0-9]+;', ' ', text)  # Add space after removing entities
+        text = re.sub(r'&#x[0-9a-fA-F]+;', ' ', text)  # Add space after removing entities
+        
+        # Remove URLs (more aggressive)
+        text = re.sub(r'https?://\S+|www\.\S+', ' ', text)  # Add space after removing URLs
+        
+        # Remove any remaining HTML-like patterns
+        text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)  # Add space after removing entities
+        text = re.sub(r'<[^>]*>', ' ', text)  # Add space after removing tags
+        text = re.sub(r'https?://[^\s<>"]+|www\.[^\s<>"]+', ' ', text)  # Add space after removing URLs
+        
+        # Remove any remaining HTML-like patterns
+        text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)  # Add space after removing entities
+        text = re.sub(r'<[^>]*>', ' ', text)  # Add space after removing tags
+        text = re.sub(r'https?://[^\s<>"]+|www\.[^\s<>"]+', ' ', text)  # Add space after removing URLs
+        
+        # Remove any remaining HTML-like patterns
+        text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)  # Add space after removing entities
+        text = re.sub(r'<[^>]*>', ' ', text)  # Add space after removing tags
+        text = re.sub(r'https?://[^\s<>"]+|www\.[^\s<>"]+', ' ', text)  # Add space after removing URLs
         
         # Convert to lowercase
         text = text.lower()
         
-        # Remove URLs
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-        
-        # Remove punctuation and special characters
-        text = text.translate(str.maketrans('', '', string.punctuation))
+        # Remove punctuation and special characters, but preserve spaces
+        text = text.translate(str.maketrans(string.punctuation, ' ' * len(string.punctuation)))
         
         # Remove numbers
-        text = re.sub(r'\d+', '', text)
+        text = re.sub(r'\d+', ' ', text)  # Add space after removing numbers
         
-        # Remove extra whitespace
+        # Remove extra whitespace and normalize spaces
         text = ' '.join(text.split())
         
-        return text
+        # Final normalization to catch any remaining special characters
+        text = self.normalize_text(text)
+        
+        # Ensure proper spacing between words
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)  # Add space between camelCase
+        text = re.sub(r'([a-z])(\d)', r'\1 \2', text)  # Add space between letters and numbers
+        text = re.sub(r'(\d)([a-z])', r'\1 \2', text)  # Add space between numbers and letters
+        
+        # Final cleanup of any remaining multiple spaces
+        text = ' '.join(text.split())
+        
+        return text.strip()
 
     def get_wordnet_pos(self, word: str) -> str:
         """Map POS tag to first character lemmatize() accepts."""
