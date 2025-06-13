@@ -149,13 +149,19 @@ def train_run(dummy=False):
     """
     # Create checkpoints directory if it doesn't exist
     base_ckpt_dir = "models/word2vec/cbow/checkpoints"
-    run_ckpt_dir = os.path.join(base_ckpt_dir, "cur_sweep")
-    # clear out stuff from the last run in the temp folder so this run has a blank slate
-    for f in os.listdir(run_ckpt_dir):
-        os.remove(os.path.join(run_ckpt_dir, f))
+    run_ckpt_dir  = os.path.join(base_ckpt_dir, "cur_sweep")
+
+    # ensure both checkpoints/ and checkpoints/cur_sweep/ exist
     os.makedirs(run_ckpt_dir, exist_ok=True)
-    # path to file which tracks the best loss across training runs within hyperparameter sweep
+
+    # now clear out any leftover files from previous run
+    for fname in os.listdir(run_ckpt_dir):
+        path = os.path.join(run_ckpt_dir, fname)
+        if os.path.isfile(path):
+            os.remove(path)
+
     best_loss_path = os.path.join(base_ckpt_dir, "best_loss.txt")
+
 
     # grab merged config (defaults + sweep overrides)
     cfg = wandb.config
