@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, Tuple
 from ..base.pipeline import BasePipeline
 from ..processors.text_processor import TextProcessor
@@ -22,6 +23,13 @@ class HNPipeline(BasePipeline):
             
             # Process the raw data
             processed_posts = self.db_processor.process_hn_data(results)
+            
+            # Save processed posts with scores to JSON
+            json_path = os.path.join(os.path.dirname(self.hn_data_path), "hn_data_cleaned.json")
+            print(f"[DEBUG] Writing processed posts with scores to: {json_path}")
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(processed_posts, f, indent=2, ensure_ascii=False)
+            print(f"[DEBUG] Finished writing JSON file: {json_path}")
             
             # Create massive string
             massive_string = []
