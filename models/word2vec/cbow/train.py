@@ -18,7 +18,7 @@ from scipy.stats import spearmanr
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from model import CBOWNS, CBOWNegativeSamplingDataset
+from model import CBOWNS, CBOWNegativeSamplingDataset, CBOWConfig, push_to_hub
 
 # load YAML config defaults (some keys are lists for sweep)
 def load_yaml_config(path):
@@ -29,7 +29,7 @@ def load_yaml_config(path):
 def get_sweep_keys(cfg):
     return [k for k, v in cfg.items() if isinstance(v, list)]
 
-# from defaults+axes build each run’s flat config
+# from defaults+axes build each run's flat config
 def generate_configs(defaults, sweep_keys):
     if not sweep_keys:
         return [defaults]
@@ -190,11 +190,18 @@ def train_run(dummy=False):
     loader = DataLoader(dataset, batch_size=cfg.BATCH_SIZE, shuffle=True)
 
     # Initialize model and optimizer
-    model = CBOWNS(vocab_size, embed_size=cfg.EMBEDDING_SIZE)
+    model_config = CBOWConfig(
+        vocab_size=vocab_size,
+        embed_size=cfg.EMBEDDING_SIZE,
+        window_size=cfg.WINDOW_SIZE,
+        num_negatives=cfg.NUM_NEGATIVES
+    )
+    model = CBOWNS(model_config)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.LEARNING_RATE)
 
     # Training loop
     best_loss: float = float("inf") # track best loss across epochs
+    best_model = None
     for epoch in range(cfg.NUM_EPOCHS):
         total_loss = 0
         pbar = tqdm(loader, desc=f"Epoch {epoch+1}", unit="batch")
@@ -227,6 +234,7 @@ def train_run(dummy=False):
         # if this epoch is the best so far, save into the run's subdir
         if avg_loss < best_loss:
             best_loss = avg_loss
+            best_model = model.state_dict()
 
             # model checkpoint
             torch.save(
@@ -237,6 +245,7 @@ def train_run(dummy=False):
                     "loss": best_loss,
                     "word_to_index": word_to_index,
                     "word_to_lemma_index": word_to_lemma_index,
+                    "config": model_config.to_dict(),
                 },
                 os.path.join(run_ckpt_dir, "cbow_model.pt"),
             )
@@ -285,9 +294,19 @@ def train_run(dummy=False):
         with open(best_loss_path, "w", encoding="utf-8") as f:
             f.write(f"{best_loss}")
 
+        # Push the best model to Hugging Face Hub
+        try:
+            print("\nPushing best model to Hugging Face Hub...")
+            model.load_state_dict(best_model)
+            repo_name = f"roshbeed/cbow-model-{wandb.run.name}"
+            push_to_hub(model, repo_name)
+            print(f"Model pushed to {repo_name}")
+        except Exception as e:
+            print(f"\nWarning: Failed to push model to Hugging Face Hub: {e}")
+            print("The model was still saved locally in the checkpoints directory.")
+
     wandb.finish()
     return model, word_to_index
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -300,6 +319,13 @@ def main():
         default=False,
     )
     args = parser.parse_args()
+
+    # Check for Hugging Face token
+    if 'HUGGINGFACE_TOKEN' not in os.environ:
+        print("\nWarning: HUGGINGFACE_TOKEN environment variable not set.")
+        print("The model will be saved locally but won't be pushed to Hugging Face Hub.")
+        print("To enable pushing to Hugging Face Hub, set your token using:")
+        print("export HUGGINGFACE_TOKEN=your_token_here\n")
 
     defaults = load_yaml_config("models/word2vec/cbow/cbow_ns.yml")
     sweep_keys = get_sweep_keys(defaults)
@@ -318,8 +344,6 @@ def main():
             config=cfg,
         )
         train_run(dummy=args.dummy)
-
-
 
 if __name__ == "__main__":
     main()
