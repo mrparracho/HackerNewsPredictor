@@ -53,6 +53,7 @@ class DatabaseProcessor:
                 'Title': story['title'],
                 'Author': story['by'],
                 'Content': post_content,
+                'Score': story['score'],
                 'Comments': []
             }
             
@@ -82,6 +83,7 @@ class DatabaseProcessor:
                 'Title': self.clean_text(post['Title']),
                 'Author': self.clean_text(post['Author']),
                 'Content': self.clean_text(post['Content']),
+                'Score': post['Score'],
                 'Comments': [self.clean_text(comment) for comment in post['Comments']]
             }
             cleaned_posts.append(cleaned_post)
