@@ -29,7 +29,8 @@ def get_dummy_vocabulary():
     vocab = [
         'hi', 'my', 'name', 'is', 'kernel',
         'and', 'i', 'like', 'to', 'code',
-        'python', 'machine', 'learning', 'is', 'fun'
+        'python', 'machine', 'learning', 'is', 'fun',
+        'king', 'queen', 'man', 'woman', 'dog', 'cat'  # Add analogy words
     ]
     # Create unique vocabulary
     unique_vocab = list(set(vocab))
@@ -53,7 +54,74 @@ def get_training_data(word_to_index):
     print(f"Loaded {len(encoded):,} words")
     return encoded
 
+import torch.nn.functional as F
+from scipy.stats import spearmanr
+# from sklearn.manifold import TSNE
+# import matplotlib.pyplot as plt
+
+def evaluate_model(model, step, word_to_ix, embedding_layer=None):
+    """
+    Evaluate the model on the analogy task and log the results to wandb.
+    """
+    # 1. Get embeddings
+    if embedding_layer is None:
+        embedding_matrix = model.in_embed.weight.detach()
+    else:
+        embedding_matrix = embedding_layer.weight.detach()
+
+    ix_to_word = {ix: w for w, ix in word_to_ix.items()}
+    words = list(word_to_ix.keys())
+
+    # 2. Similarity (Spearman)
+    similarity_pairs = [("king", "queen"), ("dog", "cat"), ("king", "dog")]
+    human_scores = [0.95, 0.85, 0.2]
+    model_scores = []
+    for (w1, w2) in similarity_pairs:
+        v1, v2 = embedding_matrix[word_to_ix[w1]], embedding_matrix[word_to_ix[w2]]
+        sim = F.cosine_similarity(v1, v2, dim=0).item()
+        model_scores.append(sim)
+    spearman_corr, _ = spearmanr(model_scores, human_scores)
+
+    # 3. Vector analogy
+    def predict_analogy(a, b, c):
+        va, vb, vc = embedding_matrix[word_to_ix[a]], embedding_matrix[word_to_ix[b]], embedding_matrix[word_to_ix[c]]
+        pred_vec = vb - va + vc
+        sims = F.cosine_similarity(embedding_matrix, pred_vec.unsqueeze(0)).numpy()
+        best_ix = sims.argmax()
+        return ix_to_word[best_ix]
+
+    predicted = predict_analogy("king", "man", "woman")
+    analogy_correct = int(predicted == "queen")
+
+    # 4. t-SNE visualization
+    # def log_tsne():
+    #     vectors = embedding_matrix.cpu().numpy()
+    #     reduced = TSNE(n_components=2, perplexity=5, random_state=42).fit_transform(vectors)
+    #     plt.figure(figsize=(6, 6))
+    #     for i, word in enumerate(words):
+    #         x, y = reduced[i]
+    #         plt.scatter(x, y)
+    #         plt.annotate(word, (x, y))
+    #     plt.title(f"t-SNE dos Embeddings - Step {step}")
+    #     plt.grid(True)
+    #     wandb.log({f"tsne_step_{step}": wandb.Image(plt)})
+    #     plt.close()
+
+    # 5. Logging to wandb
+    wandb.log({
+        "eval/similarity_spearman": spearman_corr,
+        "eval/analogy_correct": analogy_correct,
+        "eval/analogy_accuracy": float(analogy_correct),  # Convert to float for metric logging
+        "eval/analogy_prediction": predicted,
+        "eval/analogy_expected": "queen"  # Log the expected word for reference
+    })
+
+    # log_tsne()
+
 def train(dummy=False):
+    """
+    Train the CBOW model.
+    """
     # Load hyperparameters from YAML file
     with open('models/word2vec/cbow/cbow_ns.yml', 'r') as file:
         config = yaml.safe_load(file)
@@ -69,7 +137,7 @@ def train(dummy=False):
         print("Using dummy vocabulary for testing...")
         word_to_index, word_to_lemma_index = get_dummy_vocabulary()
         # Use the dummy example
-        example_text = "python machine learning is fun ---"
+        example_text = "python machine learning is fun and i like to code python is a great language for machine learning and coding is fun with python king queen man woman king queen man woman"
         words = example_text.lower().split()
         encoded = [word_to_index[word] if word in word_to_index else word_to_index['<UNK>'] for word in words]
         print(encoded)
@@ -112,10 +180,14 @@ def train(dummy=False):
             
             # Log batch loss to wandb
             wandb.log({
-                "epoch": epoch + 1,
+                "epoch": epoch + 1, 
                 "batch": batch_idx,
                 "batch_loss": loss.item()
             })
+            
+            # Evaluate model periodically
+            if batch_idx % 100 == 0:
+                evaluate_model(model, batch_idx + epoch * len(loader), word_to_index)
             
             pbar.set_postfix(loss=loss.item())
         

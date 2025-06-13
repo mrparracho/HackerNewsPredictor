@@ -197,3 +197,11 @@ cython_debug/
 .DS_Store
 .wandb
 wandb/
+*checkpoints/
+*.pt
+models/*/checkpoints/
+models/word2vec/*/checkpoints/
+*.pth
+*.ckpt
+*.bin
+*.model
