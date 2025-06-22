@@ -3,27 +3,33 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 import numpy as np
-from transformers.modeling_utils import PreTrainedModel
-from transformers.configuration_utils import PretrainedConfig
 import os
 import json
 
-class EnhancedPredictorConfig(PretrainedConfig):
-    model_type = "predictor"
-    
+class EnhancedPredictorConfig:
     def __init__(
         self,
         embedding_dim=32,
         num_categorical_features=38,
         hidden_dim=128,
-        dropout=0.2,
-        **kwargs
+        dropout=0.2
     ):
-        super().__init__(**kwargs)
         self.embedding_dim = embedding_dim
         self.num_categorical_features = num_categorical_features
         self.hidden_dim = hidden_dim
         self.dropout = dropout
+    
+    def to_dict(self):
+        return {
+            'embedding_dim': self.embedding_dim,
+            'num_categorical_features': self.num_categorical_features,
+            'hidden_dim': self.hidden_dim,
+            'dropout': self.dropout
+        }
+    
+    @classmethod
+    def from_dict(cls, config_dict):
+        return cls(**config_dict)
 
 class EnhancedHNDataset(Dataset):
     """Dataset class for enhanced HN features."""
@@ -62,13 +68,12 @@ class EnhancedHNDataset(Dataset):
             self.scores[idx]
         )
 
-class EnhancedHNPredictor(PreTrainedModel):
+class EnhancedHNPredictor(nn.Module):
     """Enhanced neural network for predicting Hacker News scores with comprehensive features."""
     
-    config_class = EnhancedPredictorConfig
-    
     def __init__(self, config):
-        super().__init__(config)
+        super().__init__()
+        self.config = config
         
         # Text embedding layers
         self.title_encoder = nn.Linear(config.embedding_dim, 64)
@@ -113,14 +118,18 @@ class EnhancedHNPredictor(PreTrainedModel):
         torch.save(self.state_dict(), os.path.join(save_directory, "pytorch_model.bin"))
         
         # Save config
-        self.config.save_pretrained(save_directory)
+        config_dict = self.config.to_dict()
+        with open(os.path.join(save_directory, "config.json"), "w") as f:
+            json.dump(config_dict, f)
     
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
         """Load the model from directory."""
-        config = kwargs.pop("config", None)
-        if config is None:
-            config = cls.config_class.from_pretrained(pretrained_model_name_or_path, **kwargs)
+        config_dict = kwargs.pop("config", None)
+        if config_dict is None:
+            with open(os.path.join(pretrained_model_name_or_path, "config.json"), "r") as f:
+                config_dict = json.load(f)
+            config = EnhancedPredictorConfig.from_dict(config_dict)
         
         model = cls(config)
         model.load_state_dict(torch.load(os.path.join(pretrained_model_name_or_path, "pytorch_model.bin")))
