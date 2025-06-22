@@ -206,10 +206,13 @@ models/word2vec/cbow/checkpoints/
 *.bin
 *.model
 
-# CBOW checkpoints (we don’t want to version‐control large binaries)
+# CBOW checkpoints (we don't want to version‐control large binaries)
 models/word2vec/cbow/checkpoints/
+models/word2vec/skipgram/checkpoints/
+models/predictor/checkpoints/
 
 # Local predictor info file
 predictor_info.json
 
-data/*
+# Data files (large files that shouldn't be in version control)
+data/
