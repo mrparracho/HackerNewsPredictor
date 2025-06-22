@@ -1,145 +1,192 @@
 """
 FastAPI service for MLX Hacker News Score Predictor
-Simplified for single title predictions only
+Using Enhanced Predictor from models/predictor
 """
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import torch
-import json
 import sys
 import numpy as np
+import os
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 
-# Add prediction module to path
-sys.path.append('./prediction')
+# Add models/predictor to path
+sys.path.append('./models/predictor')
 
-from prediction.models.predictor import SimplePredictor
-from prediction.utils.data_processing import load_cbow_embeddings
+from models.predictor.predict import predict_score, load_model, load_cbow_embeddings
 
 app = FastAPI(
     title="HN Score Predictor",
-    description="Predict Hacker News upvote scores from titles",
-    version="1.0.0"
+    description="Predict Hacker News upvote scores from titles using Enhanced Predictor",
+    version="2.0.0"
 )
 
 # Global model variables
-predictor = None
-embeddings = None
-word_to_ix = None
-model_loaded = False
+model: Optional[Any] = None
+word_to_index: Optional[Dict[str, int]] = None
+feature_names: Optional[List[str]] = None
+author_stats: Optional[Dict[str, Any]] = None
+domain_stats: Optional[Dict[str, Any]] = None
+embeddings: Optional[torch.Tensor] = None
+model_loaded: bool = False
 
 class PredictionRequest(BaseModel):
     title: str
+    content: str = ""
+    url: str = ""
+    author: str = ""
+    timestamp: Optional[int] = None
 
 class PredictionResponse(BaseModel):
     title: str
-    predicted_score: float
+    predicted_score: int
     api_source: str = "FastAPI Service"
-    model_info: str = "CBOW + SimplePredictor"
-
-def create_title_embedding(title, word_to_ix, embeddings, embedding_dim=32):
-    """Create a title embedding using the same method as training."""
-    words = title.lower().split()
-    word_embeddings = []
-    
-    for word in words:
-        if word in word_to_ix:
-            word_ix = word_to_ix[word]
-            # Check if word index is within bounds of the CBOW model
-            if word_ix < embeddings.shape[0]:
-                embedding = embeddings[word_ix].cpu().numpy()
-                word_embeddings.append(embedding)
-            else:
-                # Word index out of bounds, skip this word
-                print(f"⚠️ Word '{word}' (index {word_ix}) not in CBOW model (size {embeddings.shape[0]})")
-        else:
-            print(f"⚠️ Word '{word}' not in vocabulary")
-    
-    if not word_embeddings:
-        print("⚠️ No valid words found, using zero vector")
-        return torch.zeros(embedding_dim, dtype=torch.float32)
-    
-    # Average the word embeddings (same as training)
-    title_embedding = np.mean(word_embeddings, axis=0)
-    
-    # Ensure we have the right dimension (32) for the predictor
-    if len(title_embedding) != embedding_dim:
-        if len(title_embedding) < embedding_dim:
-            # Pad with zeros if CBOW embeddings are smaller
-            padding = np.zeros(embedding_dim - len(title_embedding))
-            title_embedding = np.concatenate([title_embedding, padding])
-        else:
-            # Truncate if CBOW embeddings are larger
-            title_embedding = title_embedding[:embedding_dim]
-    
-    return torch.tensor(title_embedding, dtype=torch.float32)
+    model_info: str = "Enhanced HN Predictor"
+    features_used: int = 0
 
 @app.on_event("startup")
 async def load_models():
-    """Load the trained models on startup"""
-    global predictor, embeddings, word_to_ix, model_loaded
+    """Load the trained enhanced models on startup"""
+    global model, word_to_index, feature_names, author_stats, domain_stats, embeddings, model_loaded
     
     try:
-        # Load CBOW model and its word mapping
-        cbow_checkpoint = torch.load('models/word2vec/cbow/checkpoints/cbow_model.pt')
-        word_to_ix = cbow_checkpoint.get('word_to_lemma_index', {})
+        print("🔄 Loading Enhanced HN Predictor models...")
         
-        # Load CBOW embeddings (needed to create title embeddings)
-        embeddings = load_cbow_embeddings('models/word2vec/cbow/checkpoints/cbow_model.pt')
+        # Load the enhanced predictor model
+        model, word_to_index, feature_names, author_stats, domain_stats = load_model()
         
-        # Load the trained predictor model
-        predictor = SimplePredictor(input_dim=32)
-        checkpoint = torch.load('prediction/best_predictor.pth', map_location='cpu')
-        predictor.load_state_dict(checkpoint['model_state_dict'])
-        predictor.eval()
+        # Load CBOW embeddings
+        embeddings = load_cbow_embeddings()
+        
         model_loaded = True
-        print("✅ Models loaded successfully")
-        print(f"📚 Using CBOW vocabulary with {len(word_to_ix)} words")
+        print("✅ Enhanced models loaded successfully")
+        print(f"📚 Using CBOW vocabulary with {len(word_to_index) if word_to_index else 0} words")
+        print(f"🔧 Using {len(feature_names) if feature_names else 0} enhanced features")
+        print(f"👥 Loaded stats for {len(author_stats) if author_stats else 0} authors and {len(domain_stats) if domain_stats else 0} domains")
             
     except Exception as e:
-        print(f"❌ Error loading models: {e}")
+        print(f"❌ Error loading enhanced models: {e}")
         model_loaded = False
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "message": "HN Score Predictor API",
+        "message": "Enhanced HN Score Predictor API",
+        "version": "2.0.0",
+        "model": "Enhanced HN Predictor",
         "endpoint": "/predict",
-        "usage": "POST /predict with {\"title\": \"your title here\"}"
+        "usage": "POST /predict with {\"title\": \"your title here\", \"content\": \"optional content\", \"url\": \"optional url\", \"author\": \"optional author\"}"
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy" if model_loaded else "unhealthy",
+        "model_loaded": model_loaded,
+        "vocabulary_size": len(word_to_index) if word_to_index else 0,
+        "features_count": len(feature_names) if feature_names else 0
+    }
+
+@app.get("/model/info")
+async def model_info():
+    """Get model information"""
+    if not model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    return {
+        "model_type": "Enhanced HN Predictor",
+        "vocabulary_size": len(word_to_index) if word_to_index else 0,
+        "features_count": len(feature_names) if feature_names else 0,
+        "authors_with_stats": len(author_stats) if author_stats else 0,
+        "domains_with_stats": len(domain_stats) if domain_stats else 0,
+        "embedding_dim": embeddings.shape[1] if embeddings is not None else 0
     }
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict_score(request: PredictionRequest):
-    """Predict upvote score for a single title"""
+async def predict_score_endpoint(request: PredictionRequest):
+    """Predict upvote score for a single title using enhanced features"""
     if not model_loaded:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     print(f"🔍 API received request for title: '{request.title}'")
     
     try:
-        # Create title embedding using the same method as training
-        title_vector = create_title_embedding(request.title, word_to_ix, embeddings)
-        print(f"📊 Created title vector shape: {title_vector.shape}")
+        # Use the enhanced predictor
+        predicted_score = predict_score(
+            title=request.title,
+            content=request.content,
+            url=request.url,
+            author=request.author,
+            timestamp=request.timestamp,
+            model=model,
+            word_to_index=word_to_index,
+            feature_names=feature_names,
+            author_stats=author_stats,
+            domain_stats=domain_stats
+        )
         
-        # Use the trained predictor model
-        with torch.no_grad():
-            predicted_score = predictor(title_vector)
-            score_value = predicted_score.item()
-        
-        print(f"🎯 Predicted score: {score_value:.2f}")
+        print(f"🎯 Enhanced prediction score: {predicted_score}")
         
         result = PredictionResponse(
             title=request.title,
-            predicted_score=round(score_value, 2)
+            predicted_score=round(predicted_score),
+            features_used=len(feature_names) if feature_names else 0
         )
         
-        print(f"✅ Returning result: {result}")
+        print(f"✅ Returning enhanced result: {result}")
         return result
         
     except Exception as e:
-        print(f"❌ Error in prediction: {str(e)}")
+        print(f"❌ Error in enhanced prediction: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+
+@app.post("/predict/batch")
+async def predict_batch_scores(request: List[str]):
+    """Predict scores for multiple titles"""
+    if not model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    try:
+        from models.predictor.predict import predict_batch_scores
+        
+        # Convert simple titles to post data format
+        posts_data = []
+        for title in request:
+            posts_data.append({
+                'title': title,
+                'text': '',
+                'url': '',
+                'by': '',
+                'time': int(datetime.now().timestamp()),
+                'descendants': 0,
+                'score': 0,
+                'dead': False,
+                'type': 'story'
+            })
+        
+        # Get batch predictions
+        predicted_scores = predict_batch_scores(
+            posts_data=posts_data,
+            model=model,
+            word_to_index=word_to_index,
+            feature_names=feature_names,
+            author_stats=author_stats,
+            domain_stats=domain_stats
+        )
+        
+        return {
+            "titles": request,
+            "predicted_scores": predicted_scores,
+            "model_info": "Enhanced HN Predictor"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in batch prediction: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch prediction error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

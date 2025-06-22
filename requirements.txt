@@ -1,8 +1,19 @@
+# Core ML dependencies
 torch==2.2.0
 numpy==1.26.4
-pandas==2.2.0
-scikit-learn==1.4.0
 wandb==0.16.3
 tqdm==4.66.1
-matplotlib==3.8.2
-seaborn==0.13.1 
+pyyaml>=6.0
+
+# Text processing
+nltk>=3.8
+requests>=2.31.0
+
+# Optional: Visualization (uncomment if needed)
+# matplotlib==3.8.2
+# seaborn==0.13.1
+# scikit-learn==1.4.0
+
+# Optional: Transformers (uncomment if using HuggingFace features)
+# transformers>=4.20.0
+# huggingface_hub>=0.16.0

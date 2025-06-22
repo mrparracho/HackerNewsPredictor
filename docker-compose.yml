@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # ML Training Service
+  # ML Training Service (Enhanced Predictor)
   # ml_training:
   #   build:
   #     context: .
@@ -15,14 +15,14 @@ services:
   #     - ./models:/app/models
   #   networks:
   #     - mlx_network
-  #   command: python cbow.py
+  #   command: python models/predictor/train.py
 
-  # API Service
+  # Enhanced API Service
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: mlx_api
+    container_name: mlx_enhanced_api
     ports:
       - "8000:8000"
     volumes:
@@ -30,16 +30,15 @@ services:
       - ./models:/app/models
     # depends_on:
     #   - ml_training
-
     networks:
       - mlx_network
 
-  # Streamlit Service (Frontend)
+  # Enhanced Streamlit Service (Frontend)
   streamlit:
     build:
       context: .
       dockerfile: Dockerfile.streamlit
-    container_name: mlx_streamlit
+    container_name: mlx_enhanced_streamlit
     ports:
       - "8501:8501"
     volumes:

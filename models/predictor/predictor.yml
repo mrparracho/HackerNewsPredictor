@@ -1,0 +1,45 @@
+# Enhanced HN Predictor Hyperparameters
+
+# Model Architecture
+EMBEDDING_DIM: 32
+HIDDEN_DIM: 128
+DROPOUT: 0.2
+
+# Training Parameters
+LEARNING_RATE: 0.001
+BATCH_SIZE: 32
+NUM_EPOCHS: 50
+PATIENCE: 10
+WEIGHT_DECAY: 1e-5
+
+# Data Parameters
+DATA_LIMIT: 846  # Number of posts to use for training (all available)
+
+# Wandb Parameters
+PROJECT_NAME: "enhanced-hn-predictor"
+RUN_NAME: "enhanced-predictor-run"
+
+# Feature Engineering Parameters
+TECHNICAL_TERMS: [
+    'ai', 'ml', 'machine learning', 'deep learning', 'neural network',
+    'blockchain', 'cryptocurrency', 'bitcoin', 'ethereum', 'web3',
+    'api', 'rest', 'graphql', 'microservices', 'kubernetes', 'docker',
+    'python', 'javascript', 'react', 'vue', 'angular', 'node.js',
+    'aws', 'azure', 'gcp', 'cloud', 'serverless', 'lambda'
+]
+
+BUZZWORDS: [
+    'revolutionary', 'game-changing', 'disruptive', 'innovative',
+    'cutting-edge', 'next-generation', 'breakthrough', 'groundbreaking',
+    'state-of-the-art', 'world-class', 'enterprise-grade', 'scalable'
+]
+
+TECH_DOMAINS: [
+    'github.com', 'stackoverflow.com', 'arxiv.org', 'medium.com',
+    'dev.to', 'hashnode.com', 'substack.com'
+]
+
+NEWS_DOMAINS: [
+    'nytimes.com', 'bbc.com', 'reuters.com', 'cnn.com',
+    'techcrunch.com', 'wired.com', 'theverge.com'
+] 

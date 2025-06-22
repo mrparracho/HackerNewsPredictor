@@ -13,10 +13,14 @@ from collections import Counter
 import unicodedata
 
 # Download required NLTK resources
-nltk.download('punkt', quiet=True)
-nltk.download('averaged_perceptron_tagger', quiet=True)
-nltk.download('wordnet', quiet=True)
-nltk.download('stopwords', quiet=True)
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    nltk.download('wordnet', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    nltk.download('wordnet_ic', quiet=True)
+except Exception as e:
+    print(f"Warning: Some NLTK resources may not be available: {e}")
 
 class TextProcessor:
     def __init__(self):
@@ -261,8 +265,25 @@ class TextProcessor:
         # Convert to lowercase
         text = text.lower()
         
+        # Handle contractions and possessives before removing punctuation
+        # Replace common contractions with their expanded forms
+        contractions = {
+            "n't": " not",
+            "'ll": " will", 
+            "'re": " are",
+            "'ve": " have",
+            "'d": " would",
+            "'m": " am",
+            "'s": " is",  # Note: this will also affect possessives, but it's a trade-off
+        }
+        
+        for contraction, expansion in contractions.items():
+            text = text.replace(contraction, expansion)
+        
         # Remove punctuation and special characters, but preserve spaces
-        text = text.translate(str.maketrans(string.punctuation, ' ' * len(string.punctuation)))
+        # Create a custom punctuation string without apostrophes
+        custom_punctuation = string.punctuation.replace("'", "")
+        text = text.translate(str.maketrans(custom_punctuation, ' ' * len(custom_punctuation)))
         
         # Remove numbers
         text = re.sub(r'\d+', ' ', text)  # Add space after removing numbers
@@ -305,30 +326,44 @@ class TextProcessor:
         """Process a batch of words and return word to lemma mapping."""
         return {word: self.lemmatize_word(word) for word in words}
 
-    def lemmatize_word_index_dict(self, word_to_index: Dict[str, int], num_threads: int = 4) -> Dict[str, int]:
-        """Lemmatize words in parallel and create word to lemma index mapping."""
-        print("Lemmatizing words...")
+    def lemmatize_word_index_dict(self, word_to_index: Dict[str, int], num_threads: int = 4, default_pos: str = 'v') -> Dict[str, int]:
+        """Lemmatize words in parallel and create word to lemma index mapping using a default POS (e.g., 'v' for verb)."""
+        print(f"Lemmatizing words with default POS '{default_pos}'...")
         words = list(word_to_index.keys())
         batch_size = len(words) // num_threads + 1
         word_to_lemma_index = {}
-        
+
+        def lemmatize_batch(batch):
+            batch_results = {}
+            for word in batch:
+                try:
+                    cleaned_word = self.clean_text(word)
+                    if cleaned_word:
+                        lemma = self.lemmatizer.lemmatize(cleaned_word, default_pos)
+                        batch_results[word] = lemma
+                    else:
+                        batch_results[word] = word  # Keep original if cleaning results in empty string
+                except Exception as e:
+                    # If lemmatization fails, use the cleaned word or original word as fallback
+                    cleaned_word = self.clean_text(word)
+                    batch_results[word] = cleaned_word if cleaned_word else word
+            return batch_results
+
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = []
             for i in range(0, len(words), batch_size):
                 batch = words[i:i + batch_size]
-                futures.append(executor.submit(self.process_batch, batch))
-            
+                futures.append(executor.submit(lemmatize_batch, batch))
             for future in tqdm(as_completed(futures), total=len(futures)):
                 batch_results = future.result()
                 with self.lock:
                     word_to_lemma_index.update(batch_results)
-        
+
         # Create lemma to index mapping
         lemma_to_index = {}
         for word, lemma in word_to_lemma_index.items():
             if lemma not in lemma_to_index:
                 lemma_to_index[lemma] = len(lemma_to_index)
-        
         # Update word_to_lemma_index to use lemma indices
         return {word: lemma_to_index[lemma] for word, lemma in word_to_lemma_index.items()}
 

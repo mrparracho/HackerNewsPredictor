@@ -7,7 +7,7 @@ from ..processors.db_processor import DatabaseProcessor
 from collections import Counter
 
 class HNPipeline(BasePipeline):
-    def __init__(self, output_dir: str = "data", limit: int = None):
+    def __init__(self, output_dir: str = "data", limit: int = 100000):
         super().__init__(output_dir)
         self.text_processor = TextProcessor()
         self.db_processor = DatabaseProcessor()
@@ -64,7 +64,7 @@ class HNPipeline(BasePipeline):
         """Process a chunk of text with cleaning."""
         return self.text_processor.process_chunk(chunk)
 
-    def run(self, num_threads: int = 4) -> Tuple[Dict[str, int], Dict[str, int]]:
+    def run(self, num_threads: int = 4, lemmatise: bool = False) -> Tuple[Dict[str, int], Dict[str, int]]:
         """Run the HN pipeline."""
         # Get data
         file_path = self.get_data()
@@ -77,10 +77,13 @@ class HNPipeline(BasePipeline):
         # Create word to index mapping
         word_to_index = {word: idx for idx, word in enumerate(word_freq.keys())}
         
-        # Lemmatize
-        word_to_lemma_index = self.text_processor.lemmatize_word_index_dict(
-            word_to_index, num_threads
-        )
+        if lemmatise:
+            # Lemmatize
+            word_to_lemma_index = self.text_processor.lemmatize_word_index_dict(
+                word_to_index, num_threads
+            )
+        else:
+            word_to_lemma_index = {}
         
         # Save results
         self.save_results(word_to_index, word_to_lemma_index, "hn")

@@ -13,10 +13,7 @@ RUN apt-get update && apt-get install -y \
 COPY streamlit-app/requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir \
-    streamlit==1.45.1 \
-    requests==2.31.0
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Streamlit app
 COPY streamlit-app/ ./streamlit-app/

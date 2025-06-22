@@ -1,5 +1,0 @@
-ipykernel
-matplotlib
-numpy
-nltk
-torch

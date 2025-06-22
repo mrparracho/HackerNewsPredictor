@@ -25,7 +25,7 @@ class WikiPipeline(BasePipeline):
         
         return self.text8_path
 
-    def run(self, num_threads: int = 4) -> Tuple[Dict[str, int], Dict[str, int]]:
+    def run(self, num_threads: int = 4, lemmatise: bool = False) -> Tuple[Dict[str, int], Dict[str, int]]:
         """Run the Wiki pipeline."""
         # Get data
         file_path = self.get_data()
@@ -38,10 +38,13 @@ class WikiPipeline(BasePipeline):
         # Create word to index mapping
         word_to_index = {word: idx for idx, word in enumerate(word_freq.keys())}
         
-        # Lemmatize
-        word_to_lemma_index = self.text_processor.lemmatize_word_index_dict(
-            word_to_index, num_threads
-        )
+        if lemmatise:
+            # Lemmatize
+            word_to_lemma_index = self.text_processor.lemmatize_word_index_dict(
+                word_to_index, num_threads
+            )
+        else:
+            word_to_lemma_index = {}
         
         # Save results
         self.save_results(word_to_index, word_to_lemma_index, "wiki")
