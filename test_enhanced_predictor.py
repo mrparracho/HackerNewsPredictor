@@ -21,7 +21,7 @@ def test_predictor():
         
         # Test loading models
         print("\n🔄 Loading models...")
-        model, word_to_index, feature_names, author_stats, domain_stats = load_model()
+        model, word_to_index, feature_names, author_stats, domain_stats, embedding_dim = load_model()
         embeddings = load_cbow_embeddings()
         
         print(f"✅ Models loaded successfully")

@@ -7,9 +7,14 @@ from datetime import datetime
 from urllib.parse import urlparse
 from collections import defaultdict
 import re
+import sys
 
-from .pipelines.hn_pipeline import HNPipeline
-from .processors.db_processor import DatabaseProcessor
+# Add the project root to the path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from etl.pipelines.hn_pipeline import HNPipeline
+from etl.processors.db_processor import DatabaseProcessor
+from etl.feature_engineer import HNFeatureEngineer
 
 class PredictorDataProcessor:
     """Process HN data for predictor model training."""
@@ -18,220 +23,6 @@ class PredictorDataProcessor:
         self.output_dir = output_dir
         self.db_processor = DatabaseProcessor()
         os.makedirs(output_dir, exist_ok=True)
-        
-        # Technical terms and buzzwords for detection
-        self.technical_terms = {
-            'ai', 'ml', 'machine learning', 'deep learning', 'neural network',
-            'blockchain', 'cryptocurrency', 'bitcoin', 'ethereum', 'web3',
-            'api', 'rest', 'graphql', 'microservices', 'kubernetes', 'docker',
-            'python', 'javascript', 'react', 'vue', 'angular', 'node.js',
-            'aws', 'azure', 'gcp', 'cloud', 'serverless', 'lambda'
-        }
-        
-        self.buzzwords = {
-            'revolutionary', 'game-changing', 'disruptive', 'innovative',
-            'cutting-edge', 'next-generation', 'breakthrough', 'groundbreaking',
-            'state-of-the-art', 'world-class', 'enterprise-grade', 'scalable'
-        }
-    
-    def extract_domain(self, url: str) -> str:
-        """Extract domain from URL."""
-        if not url or not url.startswith('http'):
-            return ''
-        try:
-            return urlparse(url).netloc.lower()
-        except:
-            return ''
-    
-    def extract_title_features(self, title: str) -> Dict[str, Any]:
-        """Extract features from title."""
-        if not title:
-            return {}
-        
-        features = {}
-        
-        # Basic text features
-        features['title_length'] = len(title.split())
-        features['title_char_length'] = len(title)
-        features['title_has_question'] = '?' in title
-        features['title_has_exclamation'] = '!' in title
-        features['title_has_numbers'] = bool(re.search(r'\d+', title))
-        features['title_has_brackets'] = '[' in title and ']' in title
-        
-        # Post type detection
-        title_lower = title.lower()
-        features['title_starts_with_show_hn'] = title_lower.startswith('show hn')
-        features['title_starts_with_ask_hn'] = title_lower.startswith('ask hn')
-        features['title_starts_with_tell_hn'] = title_lower.startswith('tell hn')
-        
-        # Technical content detection
-        title_words = set(title_lower.split())
-        features['title_has_technical_terms'] = len(title_words.intersection(self.technical_terms))
-        features['title_has_buzzwords'] = len(title_words.intersection(self.buzzwords))
-        
-        return features
-    
-    def extract_content_features(self, content: str, url: str) -> Dict[str, Any]:
-        """Extract features from content/URL."""
-        features = {}
-        
-        # Content type detection
-        features['content_is_url'] = bool(url and url.startswith('http'))
-        features['content_is_text'] = bool(content and not url)
-        features['content_has_video'] = False
-        features['content_has_pdf'] = False
-        
-        if url:
-            url_lower = url.lower()
-            features['content_has_video'] = 'youtube' in url_lower or 'video' in url_lower
-            features['content_has_pdf'] = '.pdf' in url_lower
-            
-            # Domain features
-            domain = self.extract_domain(url)
-            if domain:
-                features['domain'] = domain
-                features['is_tech_domain'] = domain in ['github.com', 'stackoverflow.com', 'arxiv.org', 'medium.com']
-                features['is_news_domain'] = domain in ['nytimes.com', 'bbc.com', 'reuters.com', 'cnn.com']
-                features['is_blog_domain'] = 'blog' in domain or 'medium.com' in domain
-            else:
-                features['domain'] = None
-                features['is_tech_domain'] = False
-                features['is_news_domain'] = False
-                features['is_blog_domain'] = False
-        
-        return features
-    
-    def extract_time_features(self, timestamp: int) -> Dict[str, Any]:
-        """Extract time-based features."""
-        if not timestamp or not isinstance(timestamp, int):
-            return {}
-        
-        dt = datetime.fromtimestamp(timestamp)
-        
-        features = {}
-        features['hour_of_day'] = dt.hour
-        features['day_of_week'] = dt.weekday()  # 0=Monday, 6=Sunday
-        features['month_of_year'] = dt.month
-        features['week_of_year'] = dt.isocalendar()[1]
-        features['is_weekend'] = dt.weekday() >= 5
-        features['is_work_hours'] = 9 <= dt.hour <= 17
-        features['is_late_night'] = 0 <= dt.hour <= 6
-        features['is_peak_hours'] = 8 <= dt.hour <= 10 or 17 <= dt.hour <= 19
-        features['is_holiday_season'] = dt.month in [11, 12]  # November/December
-        
-        return features
-    
-    def extract_author_features(self, author: str, author_stats: Dict) -> Dict[str, Any]:
-        """Extract author-based features."""
-        features = {}
-        
-        if author and author in author_stats:
-            stats = author_stats[author]
-            features['author_total_posts'] = stats['total_posts']
-            features['author_avg_score'] = stats['avg_score']
-            features['author_max_score'] = stats['max_score']
-            features['author_is_regular'] = stats['is_regular']
-            features['author_score_variance'] = stats['score_variance']
-        else:
-            features['author_total_posts'] = 0
-            features['author_avg_score'] = 0
-            features['author_max_score'] = 0
-            features['author_is_regular'] = False
-            features['author_score_variance'] = 0
-        
-        return features
-    
-    def extract_engagement_features(self, descendants: int, score: int) -> Dict[str, Any]:
-        """Extract engagement features."""
-        features = {}
-        
-        features['comment_count'] = descendants or 0
-        features['has_comments'] = bool(descendants and descendants > 0)
-        features['comment_engagement_ratio'] = (descendants or 0) / max(score, 1) if score else 0
-        
-        return features
-    
-    def calculate_author_stats(self, posts: List[Dict]) -> Dict[str, Dict]:
-        """Calculate author statistics from all posts."""
-        author_posts = defaultdict(list)
-        author_scores = defaultdict(list)
-        
-        for post in posts:
-            if post.get('type') == 'story' and post.get('by') and post.get('score') is not None:
-                author_posts[post['by']].append(post)
-                author_scores[post['by']].append(post['score'])
-        
-        author_stats = {}
-        for author in author_scores:
-            scores = author_scores[author]
-            author_stats[author] = {
-                'total_posts': len(scores),
-                'avg_score': np.mean(scores),
-                'max_score': np.max(scores),
-                'score_variance': np.var(scores),
-                'is_regular': len(scores) > 10
-            }
-        
-        return author_stats
-    
-    def calculate_domain_stats(self, posts: List[Dict]) -> Dict[str, Dict]:
-        """Calculate domain statistics from all posts."""
-        domain_posts = defaultdict(list)
-        domain_scores = defaultdict(list)
-        
-        for post in posts:
-            if post.get('type') == 'story' and post.get('url'):
-                domain = self.extract_domain(post['url'])
-                if domain and post.get('score') is not None:
-                    domain_posts[domain].append(post)
-                    domain_scores[domain].append(post['score'])
-        
-        domain_stats = {}
-        for domain in domain_scores:
-            scores = domain_scores[domain]
-            domain_stats[domain] = {
-                'post_count': len(scores),
-                'avg_score': np.mean(scores),
-                'max_score': np.max(scores)
-            }
-        
-        return domain_stats
-    
-    def create_enhanced_features(self, post: Dict, author_stats: Dict, domain_stats: Dict) -> Dict[str, Any]:
-        """Create enhanced features for a single post."""
-        features = {}
-        
-        # Title features
-        title_features = self.extract_title_features(post.get('title', ''))
-        features.update(title_features)
-        
-        # Content features
-        content_features = self.extract_content_features(
-            post.get('text', ''), 
-            post.get('url', '')
-        )
-        features.update(content_features)
-        
-        # Time features
-        time_features = self.extract_time_features(post.get('time', 0))
-        features.update(time_features)
-        
-        # Author features
-        author_features = self.extract_author_features(post.get('by', ''), author_stats)
-        features.update(author_features)
-        
-        # Engagement features
-        engagement_features = self.extract_engagement_features(
-            post.get('descendants', 0), 
-            post.get('score', 0)
-        )
-        features.update(engagement_features)
-        
-        # Post status features
-        features['is_dead'] = post.get('dead', False)
-        features['post_type'] = post.get('type', 'unknown')
-        
-        return features
     
     def convert_numpy_types(self, obj):
         """Convert numpy types to native Python types for JSON serialization."""
@@ -290,56 +81,131 @@ class PredictorDataProcessor:
         
         print(f"Valid posts for training: {len(valid_posts)}")
         
-        # Calculate author and domain statistics
-        print("Calculating author and domain statistics...")
-        author_stats = self.calculate_author_stats(converted_posts)
-        domain_stats = self.calculate_domain_stats(converted_posts)
+        # Save raw data for model training
+        print("Saving raw data for model training...")
         
-        # Create enhanced features for each post
-        print("Creating enhanced features...")
-        enhanced_posts = []
+        # Save raw posts
+        posts_path = os.path.join(self.output_dir, "hn_data_raw.json")
+        posts_serializable = self.convert_numpy_types(valid_posts)
+        with open(posts_path, 'w', encoding='utf-8') as f:
+            json.dump(posts_serializable, f, indent=2, ensure_ascii=False)
         
-        for i, post in enumerate(valid_posts):
-            if i % 1000 == 0:
-                print(f"Processing post {i+1}/{len(valid_posts)}")
-            
-            features = self.create_enhanced_features(post, author_stats, domain_stats)
-            
-            enhanced_post = {
-                'id': post.get('id'),
-                'title': post.get('title', ''),
-                'text': post.get('text', ''),
-                'url': post.get('url', ''),
-                'score': post.get('score', 0),
-                'features': features
+        # Generate features using feature engineer
+        print("Generating features using feature engineer...")
+        self.generate_features(valid_posts)
+        
+        # Save summary statistics
+        summary_path = os.path.join(self.output_dir, "hn_data_summary.json")
+        summary = {
+            'total_posts': len(valid_posts),
+            'processed_at': datetime.now().isoformat(),
+            'data_schema': {
+                'id': 'int',
+                'type': 'str',
+                'title': 'str', 
+                'text': 'str',
+                'url': 'str',
+                'by': 'str',
+                'score': 'int',
+                'descendants': 'int',
+                'time': 'int',
+                'dead': 'bool'
             }
-            enhanced_posts.append(enhanced_post)
-        
-        # Save enhanced data
-        print("Saving enhanced predictor data...")
-        enhanced_data_path = os.path.join(self.output_dir, "predictor_data.json")
-        # Convert numpy types for JSON serialization
-        enhanced_posts_serializable = self.convert_numpy_types(enhanced_posts)
-        with open(enhanced_data_path, 'w', encoding='utf-8') as f:
-            json.dump(enhanced_posts_serializable, f, indent=2, ensure_ascii=False)
-        
-        # Save author and domain statistics
-        stats_path = os.path.join(self.output_dir, "predictor_stats.json")
-        stats_data = {
-            'author_stats': author_stats,
-            'domain_stats': domain_stats,
-            'total_posts': len(enhanced_posts),
-            'feature_names': list(enhanced_posts[0]['features'].keys()) if enhanced_posts else []
         }
-        # Convert numpy types for JSON serialization
-        stats_data_serializable = self.convert_numpy_types(stats_data)
-        with open(stats_path, 'w', encoding='utf-8') as f:
-            json.dump(stats_data_serializable, f, indent=2, ensure_ascii=False)
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False)
         
-        print(f"Enhanced predictor data saved to: {enhanced_data_path}")
-        print(f"Statistics saved to: {stats_path}")
-        print(f"Total posts processed: {len(enhanced_posts)}")
-        print(f"Number of features: {len(stats_data['feature_names'])}")
+        print(f"✅ Raw data saved to: {posts_path}")
+        print(f"✅ Summary saved to: {summary_path}")
+        print(f"📊 Total posts processed: {len(valid_posts)}")
+        print(f"📝 Data ready for model training with feature engineering")
+    
+    def generate_features(self, posts_data):
+        """Generate features using the feature engineer and save to predictor_data.json."""
+        try:
+            # Load vocabulary and embeddings
+            print("Loading vocabulary and embeddings...")
+            word_to_index = {}
+            embeddings = None
+            
+            # Load vocabulary
+            vocab_path = os.path.join(self.output_dir, 'combined_word_to_index.json')
+            if os.path.exists(vocab_path):
+                with open(vocab_path, 'r', encoding='utf-8') as f:
+                    word_to_index = json.load(f)
+                print(f"Loaded vocabulary with {len(word_to_index)} words")
+            
+            # Load embeddings
+            embeddings_path = 'models/word2vec/cbow/checkpoints/cbow_model.pt'
+            if os.path.exists(embeddings_path):
+                checkpoint = torch.load(embeddings_path, map_location='cpu')
+                # The embeddings are stored in the model state dict
+                embeddings = checkpoint['model_state_dict']['in_embed.weight'].numpy()
+                print(f"Loaded embeddings with shape {embeddings.shape}")
+            else:
+                print("⚠️  Embeddings not found, using dummy embeddings")
+                embeddings = np.random.randn(1000, 32)
+            
+            # Initialize feature engineer
+            embedding_dim = embeddings.shape[1] if embeddings is not None else 32
+            feature_engineer = HNFeatureEngineer(
+                word_to_ix=word_to_index,
+                embeddings=embeddings,
+                embedding_dim=embedding_dim
+            )
+            
+            # Create feature matrix
+            print("Creating feature matrix...")
+            feature_matrices, feature_names = feature_engineer.create_feature_matrix(posts_data)
+            
+            # Create predictor data with features and embeddings
+            predictor_data = []
+            for i, post in enumerate(posts_data):
+                if i < len(feature_matrices['scores']):
+                    predictor_record = {
+                        'id': post.get('id', i),
+                        'title': post.get('title', ''),
+                        'text': post.get('text', ''),
+                        'url': post.get('url', ''),
+                        'score': int(feature_matrices['scores'][i]),
+                        'title_embedding': feature_matrices['title_embeddings'][i].tolist(),
+                        'content_embedding': feature_matrices['content_embeddings'][i].tolist(),
+                        'features': {}
+                    }
+                    
+                    # Add categorical features
+                    categorical_features = feature_matrices['categorical_features'][i]
+                    for j, feature_name in enumerate(feature_names):
+                        if j < len(categorical_features):
+                            predictor_record['features'][feature_name] = float(categorical_features[j])
+                    
+                    predictor_data.append(predictor_record)
+            
+            # Save predictor data
+            predictor_path = os.path.join(self.output_dir, "predictor_data.json")
+            with open(predictor_path, 'w', encoding='utf-8') as f:
+                json.dump(predictor_data, f, indent=2, ensure_ascii=False)
+            
+            # Save feature engineer stats
+            stats_path = os.path.join(self.output_dir, "predictor_stats.json")
+            stats = {
+                'author_stats': feature_engineer.author_stats,
+                'domain_stats': feature_engineer.domain_stats,
+                'feature_names': feature_names,
+                'embedding_dim': embedding_dim,
+                'total_samples': len(predictor_data)
+            }
+            with open(stats_path, 'w', encoding='utf-8') as f:
+                json.dump(stats, f, indent=2, ensure_ascii=False)
+            
+            print(f"✅ Predictor data saved to: {predictor_path}")
+            print(f"✅ Predictor stats saved to: {stats_path}")
+            print(f"📊 Generated features for {len(predictor_data)} samples")
+            
+        except Exception as e:
+            print(f"❌ Error generating features: {e}")
+            import traceback
+            traceback.print_exc()
 
 def main():
     """Main function to run the predictor data processing."""
@@ -351,7 +217,11 @@ def main():
     # Process data with limit (adjust as needed)
     processor.process_predictor_data(limit=100000)
     
-    print("\nPredictor data processing complete!")
+    print("\n🎉 Predictor data processing complete!")
+    print("\nNext steps:")
+    print("1. Train word2vec models: python models/word2vec/cbow/train.py")
+    print("2. Run model training: python models/predictor/train.py")
+    print("3. Test predictions: python models/predictor/predict.py")
 
 if __name__ == "__main__":
     main()

@@ -1,10 +1,10 @@
-# Enhanced HN Predictor 🚀
+# HN Predictor 🚀
 
 A comprehensive neural network model for predicting Hacker News post scores using advanced feature engineering and word embeddings.
 
 ## Overview
 
-This enhanced predictor goes beyond simple title embeddings to include:
+This predictor goes beyond simple title embeddings to include:
 
 - **Text Embeddings**: Title and content embeddings using pre-trained CBOW
 - **Categorical Features**: 38+ engineered features from post metadata
@@ -56,7 +56,7 @@ models/predictor/
 ├── model.py              # Core model and feature engineering
 ├── train.py              # Training script
 ├── predict.py            # Prediction and inference
-├── enhanced_predictor.yml # Configuration file
+├── predictor.yml         # Configuration file
 ├── requirements.txt      # Dependencies
 └── README.md            # This file
 ```
@@ -119,7 +119,7 @@ print(f"Predicted score: {score:.1f}")
 
 ## Model Architecture
 
-The enhanced predictor uses a multi-input neural network:
+The predictor uses a multi-input neural network:
 
 ```
 Input Layers:
@@ -136,7 +136,7 @@ Combined Network:
 
 ## Configuration
 
-Edit `enhanced_predictor.yml` to customize:
+Edit `predictor.yml` to customize:
 
 - Model architecture (embedding dim, hidden dim, dropout)
 - Training parameters (learning rate, batch size, epochs)
@@ -167,7 +167,7 @@ Edit `enhanced_predictor.yml` to customize:
 
 ## Performance
 
-The enhanced model typically achieves:
+The model typically achieves:
 - **Lower MSE** compared to title-only models
 - **Better generalization** across different post types
 - **More interpretable** predictions with feature importance

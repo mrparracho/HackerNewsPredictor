@@ -1,6 +1,6 @@
 """
 FastAPI service for MLX Hacker News Score Predictor
-Using Enhanced Predictor from models/predictor
+Using Predictor from models/predictor
 """
 
 from fastapi import FastAPI, HTTPException
@@ -19,7 +19,7 @@ from models.predictor.predict import predict_score, load_model, load_cbow_embedd
 
 app = FastAPI(
     title="HN Score Predictor",
-    description="Predict Hacker News upvote scores from titles using Enhanced Predictor",
+    description="Predict Hacker News upvote scores from titles using Predictor",
     version="2.0.0"
 )
 
@@ -43,40 +43,54 @@ class PredictionResponse(BaseModel):
     title: str
     predicted_score: int
     api_source: str = "FastAPI Service"
-    model_info: str = "Enhanced HN Predictor"
+    model_info: str = "HN Predictor"
     features_used: int = 0
 
 @app.on_event("startup")
 async def load_models():
-    """Load the trained enhanced models on startup"""
+    """Load the trained models on startup"""
     global model, word_to_index, feature_names, author_stats, domain_stats, embeddings, model_loaded
     
     try:
-        print("🔄 Loading Enhanced HN Predictor models...")
+        print("🔄 Loading HN Predictor models...")
         
-        # Load the enhanced predictor model
-        model, word_to_index, feature_names, author_stats, domain_stats = load_model()
+        # Load the predictor model
+        model, word_to_index, feature_names, author_stats, domain_stats, embedding_dim = load_model()
         
         # Load CBOW embeddings
         embeddings = load_cbow_embeddings()
         
+        # Load feature engineer stats if available
+        stats_path = os.path.join('models/predictor/checkpoints/cur_run', 'feature_engineer_stats.pt')
+        if os.path.exists(stats_path):
+            stats = torch.load(stats_path)
+            author_stats = stats.get('author_stats')
+            if author_stats is None:
+                author_stats = {}
+            domain_stats = stats.get('domain_stats')
+            if domain_stats is None:
+                domain_stats = {}
+            print(f"✅ Loaded feature engineer stats: {len(author_stats)} authors, {len(domain_stats)} domains")
+        else:
+            print("⚠️  feature_engineer_stats.pt not found, using empty stats.")
+        
         model_loaded = True
-        print("✅ Enhanced models loaded successfully")
+        print("✅ Models loaded successfully")
         print(f"📚 Using CBOW vocabulary with {len(word_to_index) if word_to_index else 0} words")
         print(f"🔧 Using {len(feature_names) if feature_names else 0} enhanced features")
         print(f"👥 Loaded stats for {len(author_stats) if author_stats else 0} authors and {len(domain_stats) if domain_stats else 0} domains")
             
     except Exception as e:
-        print(f"❌ Error loading enhanced models: {e}")
+        print(f"❌ Error loading models: {e}")
         model_loaded = False
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "message": "Enhanced HN Score Predictor API",
+        "message": "HN Score Predictor API",
         "version": "2.0.0",
-        "model": "Enhanced HN Predictor",
+        "model": "HN Predictor",
         "endpoint": "/predict",
         "usage": "POST /predict with {\"title\": \"your title here\", \"content\": \"optional content\", \"url\": \"optional url\", \"author\": \"optional author\"}"
     }
@@ -98,7 +112,7 @@ async def model_info():
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     return {
-        "model_type": "Enhanced HN Predictor",
+        "model_type": "HN Predictor",
         "vocabulary_size": len(word_to_index) if word_to_index else 0,
         "features_count": len(feature_names) if feature_names else 0,
         "authors_with_stats": len(author_stats) if author_stats else 0,
@@ -115,7 +129,7 @@ async def predict_score_endpoint(request: PredictionRequest):
     print(f"🔍 API received request for title: '{request.title}'")
     
     try:
-        # Use the enhanced predictor
+        # Use the predictor
         predicted_score = predict_score(
             title=request.title,
             content=request.content,
@@ -129,7 +143,7 @@ async def predict_score_endpoint(request: PredictionRequest):
             domain_stats=domain_stats
         )
         
-        print(f"🎯 Enhanced prediction score: {predicted_score}")
+        print(f"🎯 Prediction score: {predicted_score}")
         
         result = PredictionResponse(
             title=request.title,
@@ -137,11 +151,11 @@ async def predict_score_endpoint(request: PredictionRequest):
             features_used=len(feature_names) if feature_names else 0
         )
         
-        print(f"✅ Returning enhanced result: {result}")
+        print(f"✅ Returning result: {result}")
         return result
         
     except Exception as e:
-        print(f"❌ Error in enhanced prediction: {str(e)}")
+        print(f"❌ Error in prediction: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
 @app.post("/predict/batch")
@@ -181,7 +195,7 @@ async def predict_batch_scores(request: List[str]):
         return {
             "titles": request,
             "predicted_scores": predicted_scores,
-            "model_info": "Enhanced HN Predictor"
+            "model_info": "HN Predictor"
         }
         
     except Exception as e:

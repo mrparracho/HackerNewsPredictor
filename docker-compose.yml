@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # ML Training Service (Enhanced Predictor)
+  # ML Training Service (Predictor)
   # ml_training:
   #   build:
   #     context: .

@@ -1,4 +1,4 @@
-# Enhanced HN Predictor Hyperparameters
+# HN Predictor Hyperparameters
 
 # Model Architecture
 EMBEDDING_DIM: 32
@@ -13,11 +13,11 @@ PATIENCE: 10
 WEIGHT_DECAY: 1e-5
 
 # Data Parameters
-DATA_LIMIT: 846  # Number of posts to use for training (all available)
+DATA_LIMIT: 8088  # Number of posts to use for training (all available)
 
 # Wandb Parameters
-PROJECT_NAME: "enhanced-hn-predictor"
-RUN_NAME: "enhanced-predictor-run"
+PROJECT_NAME: "hn-predictor"
+RUN_NAME: "predictor-run"
 
 # Feature Engineering Parameters
 TECHNICAL_TERMS: [

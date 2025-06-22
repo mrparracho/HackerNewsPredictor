@@ -4,7 +4,7 @@ import os
 
 # Set page config
 st.set_page_config(
-    page_title="Enhanced HN Score Predictor",
+    page_title="HN Score Predictor",
     page_icon="🚀",
     layout="wide"
 )
@@ -91,7 +91,7 @@ def predict_score_api(title, content="", url="", author=""):
 
 def main():
     # Title and description
-    st.markdown('<div class="title">Enhanced HN Score Predictor 🚀</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title">HN Score Predictor 🚀</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Predict upvotes using advanced features and ML!</div>', unsafe_allow_html=True)
     
     # Show API URL for debugging
@@ -105,7 +105,7 @@ def main():
         # Show model info
         if health_info.get('model_loaded'):
             st.markdown('<div class="feature-info">', unsafe_allow_html=True)
-            st.markdown(f"**Model:** Enhanced HN Predictor")
+            st.markdown(f"**Model:** HN Predictor")
             st.markdown(f"**Vocabulary:** {health_info.get('vocabulary_size', 0)} words")
             st.markdown(f"**Features:** {health_info.get('features_count', 0)} enhanced features")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -147,7 +147,7 @@ def main():
             # Display prediction
             st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
             st.markdown("### Enhanced Prediction")
-            st.markdown(f"**Predicted Score:** {predicted_score:.1f} upvotes")
+            st.markdown(f"**Predicted Score:** {predicted_score} upvotes")
             st.markdown(f"**Features Used:** {features_used} enhanced features")
             
             # Show API source information
