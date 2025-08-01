@@ -145,6 +145,12 @@ class HNFeatureEngineer:
         features['content_has_video'] = False
         features['content_has_pdf'] = False
         
+        # Initialize domain features with defaults
+        features['is_tech_domain'] = False
+        features['is_news_domain'] = False
+        features['is_blog_domain'] = False
+        features['domain_post_count'] = 0
+        
         if url:
             url_lower = url.lower()
             features['content_has_video'] = 'youtube' in url_lower or 'video' in url_lower
@@ -161,18 +167,13 @@ class HNFeatureEngineer:
                 # Domain statistics
                 if domain in self.domain_stats:
                     features['domain_post_count'] = self.domain_stats[domain]['post_count']
-                    features['domain_avg_score'] = self.domain_stats[domain]['avg_score']
                 else:
                     features['domain_post_count'] = 0
-                    features['domain_avg_score'] = 0
             else:
                 features['domain'] = None
-                features['is_tech_domain'] = False
-                features['is_news_domain'] = False
-                features['is_blog_domain'] = False
-                features['domain_post_count'] = 0
-                features['domain_avg_score'] = 0
-        
+        else:
+            features['domain'] = None
+    
         return features
     
     def extract_time_features(self, timestamp):

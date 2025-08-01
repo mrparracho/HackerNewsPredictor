@@ -11,7 +11,7 @@ import numpy as np
 from datetime import datetime
 import sys
 from typing import Dict, Any, List, Optional
-from model import EnhancedHNPredictor, EnhancedPredictorConfig
+from .model import EnhancedHNPredictor, EnhancedPredictorConfig
 
 # Add etl to path for feature engineer
 sys.path.append('./etl')
@@ -119,22 +119,14 @@ def predict_score(title, content="", url="", author="", timestamp=None, model=No
     # Create features using the same method as training
     features = feature_engineer.create_enhanced_features(post_data)
 
-    # Ensure we have all expected features by using the same feature list as training
-    categorical_feature_names = [
-        'title_length', 'title_char_length', 'title_has_question', 'title_has_exclamation',
-        'title_has_numbers', 'title_has_brackets', 'title_starts_with_show_hn',
-        'title_starts_with_ask_hn', 'title_starts_with_tell_hn', 'title_has_technical_terms',
-        'title_has_buzzwords', 'content_is_url', 'content_is_text', 'content_has_video',
-        'content_has_pdf', 'is_tech_domain', 'is_news_domain', 'is_blog_domain',
-        'domain_post_count', 'hour_of_day', 'day_of_week', 'month_of_year', 'week_of_year',
-        'is_weekend', 'is_work_hours', 'is_late_night', 'is_peak_hours', 'is_holiday_season',
-        'author_total_posts', 'author_avg_score', 'author_max_score', 'author_is_regular',
-        'author_score_variance', 'comment_count', 'has_comments', 'comment_engagement_ratio',
-        'is_dead'
-    ]
-
-    # Extract features in the correct order, using the same list as training
-    categorical_features = torch.tensor([features.get(name, 0) for name in categorical_feature_names], dtype=torch.float32).unsqueeze(0)
+    # Use only the features that the model was actually trained with
+    # The model config shows it was trained with 25 features, so we'll use the first 25 from feature_names
+    model_expected_features = feature_names[:model.config.num_categorical_features]
+    
+    print(f"🔧 Model expects {model.config.num_categorical_features} features: {model_expected_features}")
+    
+    # Extract features in the correct order, using only what the model expects
+    categorical_features = torch.tensor([features.get(name, 0) for name in model_expected_features], dtype=torch.float32).unsqueeze(0)
 
     # Extract embeddings from features
     title_embedding = torch.tensor(features['title_embedding'], dtype=torch.float32).unsqueeze(0)
@@ -145,12 +137,20 @@ def predict_score(title, content="", url="", author="", timestamp=None, model=No
     with torch.no_grad():
         prediction = model(title_embedding, content_embedding, categorical_features)
         predicted_log_score = prediction.item()
+        
+        # Debug: Print the raw prediction
+        print(f"🔍 Raw model prediction (log scale): {predicted_log_score:.6f}")
 
     # Convert from log scale back to original scale
     predicted_score = np.expm1(predicted_log_score)
+    
+    # Debug: Print the converted score
+    print(f"🔍 Converted score (expm1): {predicted_score:.6f}")
 
     # Round to nearest integer since HN scores are always integers
     predicted_score = max(0, round(predicted_score))
+    
+    print(f"🔍 Final predicted score: {predicted_score}")
 
     return predicted_score
 
@@ -190,10 +190,29 @@ def predict_batch_scores(posts_data, model=None, word_to_index=None, feature_nam
     # Create feature matrices
     feature_matrices, _ = feature_engineer.create_feature_matrix(posts_data)
     
-    # Convert to tensors
+    # Use only the features that the model was actually trained with
+    model_expected_features = feature_names[:model.config.num_categorical_features]
+    
+    # Convert to tensors, using only the features the model expects
     title_embeddings = torch.tensor(feature_matrices['title_embeddings'], dtype=torch.float32)
     content_embeddings = torch.tensor(feature_matrices['content_embeddings'], dtype=torch.float32)
-    categorical_features = torch.tensor(feature_matrices['categorical_features'], dtype=torch.float32)
+    
+    # Extract only the features the model expects
+    categorical_features_list = []
+    for i in range(len(feature_matrices['categorical_features'])):
+        features = {}
+        # Create a features dict from the feature matrix
+        for j, name in enumerate(feature_names):
+            if j < len(feature_matrices['categorical_features'][i]):
+                features[name] = feature_matrices['categorical_features'][i][j]
+            else:
+                features[name] = 0
+        
+        # Extract only the expected features
+        categorical_features_sample = [features.get(name, 0) for name in model_expected_features]
+        categorical_features_list.append(categorical_features_sample)
+    
+    categorical_features = torch.tensor(categorical_features_list, dtype=torch.float32)
     
     # Make predictions
     model.eval()
