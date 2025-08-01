@@ -135,6 +135,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+scratch/
 
 # Spyder project settings
 .spyderproject
@@ -192,3 +193,26 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# our custom files
+.DS_Store
+.wandb
+wandb/
+*.pt
+models/word2vec/cbow/checkpoints/*
+models/word2vec/cbow/checkpoints/
+*.pth
+*.ckpt
+*.bin
+*.model
+
+# CBOW checkpoints (we don't want to version‐control large binaries)
+models/word2vec/cbow/checkpoints/
+models/word2vec/skipgram/checkpoints/
+models/predictor/checkpoints/
+
+# Local predictor info file
+predictor_info.json
+
+# Data files (large files that shouldn't be in version control)
+data/

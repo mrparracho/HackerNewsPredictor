@@ -1,0 +1,7 @@
+# Web app dependencies
+streamlit==1.32.0
+requests>=2.31.0
+
+# ML dependencies (for local inference if needed)
+torch==2.2.0
+numpy==1.26.4 

@@ -1,0 +1,21 @@
+# Skip-gram with Negative Sampling Hyperparameters
+
+# Dataset Parameters
+WINDOW_SIZE: 2
+NUM_NEGATIVES: 3
+BATCH_SIZE: 4
+
+# Model Parameters
+EMBEDDING_SIZE: 10
+
+# Training Parameters
+LEARNING_RATE: 0.01
+NUM_EPOCHS: 5
+OPTIMIZER: "Adam"
+
+# Wandb Parameters
+PROJECT_NAME: "word2vec-skipgram-ns"
+RUN_NAME: "skipgram-tqdm-wandb"
+
+# Inference Parameters
+TOP_K_PREDICTIONS: 4
