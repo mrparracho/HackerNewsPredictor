@@ -478,9 +478,17 @@ def train_run(dummy=False, use_precomputed=True, use_wandb=True, use_hf=True):
     final_test_scores = original_scores[train_size + val_size:]
     
     # Initialize model
+    # Initialize model with actual feature count
+    actual_num_features = feature_matrices['categorical_features'].shape[1]
+    print(f"📊 Model configuration:")
+    print(f"  Embedding dimension: {embedding_dim}")
+    print(f"  Categorical features: {actual_num_features}")
+    print(f"  Hidden dimension: {config['HIDDEN_DIM']}")
+    print(f"  Dropout: {config['DROPOUT']}")
+
     model_config = EnhancedPredictorConfig(
         embedding_dim=embedding_dim,
-        num_categorical_features=len(feature_names),
+        num_categorical_features=actual_num_features,  # Use actual feature count
         hidden_dim=config['HIDDEN_DIM'],
         dropout=config['DROPOUT']
     )
