@@ -116,26 +116,42 @@ def predict_score(title, content="", url="", author="", timestamp=None, model=No
     feature_engineer.author_stats = author_stats
     feature_engineer.domain_stats = domain_stats
     
-    # Create features
+    # Create features using the same method as training
     features = feature_engineer.create_enhanced_features(post_data)
-    
-    # Extract features in the correct order
+
+    # Ensure we have all expected features by using the same feature list as training
+    categorical_feature_names = [
+        'title_length', 'title_char_length', 'title_has_question', 'title_has_exclamation',
+        'title_has_numbers', 'title_has_brackets', 'title_starts_with_show_hn',
+        'title_starts_with_ask_hn', 'title_starts_with_tell_hn', 'title_has_technical_terms',
+        'title_has_buzzwords', 'content_is_url', 'content_is_text', 'content_has_video',
+        'content_has_pdf', 'is_tech_domain', 'is_news_domain', 'is_blog_domain',
+        'domain_post_count', 'hour_of_day', 'day_of_week', 'month_of_year', 'week_of_year',
+        'is_weekend', 'is_work_hours', 'is_late_night', 'is_peak_hours', 'is_holiday_season',
+        'author_total_posts', 'author_avg_score', 'author_max_score', 'author_is_regular',
+        'author_score_variance', 'comment_count', 'has_comments', 'comment_engagement_ratio',
+        'is_dead'
+    ]
+
+    # Extract features in the correct order, using the same list as training
+    categorical_features = torch.tensor([features.get(name, 0) for name in categorical_feature_names], dtype=torch.float32).unsqueeze(0)
+
+    # Extract embeddings from features
     title_embedding = torch.tensor(features['title_embedding'], dtype=torch.float32).unsqueeze(0)
     content_embedding = torch.tensor(features['content_embedding'], dtype=torch.float32).unsqueeze(0)
-    categorical_features = torch.tensor([features.get(name, 0) for name in feature_names], dtype=torch.float32).unsqueeze(0)
-    
+
     # Make prediction
     model.eval()
     with torch.no_grad():
         prediction = model(title_embedding, content_embedding, categorical_features)
         predicted_log_score = prediction.item()
-    
+
     # Convert from log scale back to original scale
     predicted_score = np.expm1(predicted_log_score)
-    
+
     # Round to nearest integer since HN scores are always integers
     predicted_score = max(0, round(predicted_score))
-    
+
     return predicted_score
 
 def predict_batch_scores(posts_data, model=None, word_to_index=None, feature_names=None, 
