@@ -1,10 +1,10 @@
 # HN Predictor 🚀
 
-A comprehensive neural network model for predicting Hacker News post scores using advanced feature engineering and word embeddings.
+A neural network model for predicting Hacker News post scores using word embeddings and feature engineering.
 
 ## Overview
 
-This predictor goes beyond simple title embeddings to include:
+This predictor uses:
 
 - **Text Embeddings**: Title and content embeddings using pre-trained CBOW
 - **Categorical Features**: 38+ engineered features from post metadata
@@ -79,7 +79,7 @@ python train.py
 ```bash
 # Run ETL pipeline to get data
 cd etl
-python main.py
+python predictor.py
 ```
 
 ## Usage
@@ -177,8 +177,7 @@ The model typically achieves:
 - **PyTorch**: Neural network framework
 - **NumPy**: Numerical computations
 - **WandB**: Experiment tracking
-- **Transformers**: Model configuration
-- **Scikit-learn**: Feature processing utilities
+- **PyYAML**: Configuration management
 
 ## Troubleshooting
 

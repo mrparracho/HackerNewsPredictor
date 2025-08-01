@@ -1,4 +1,4 @@
-# Refactored Architecture: Training-Based Feature Engineering
+# Refactored Architecture: ETL-Driven Feature Engineering
 
 ## 🎯 Problem Solved
 
@@ -13,22 +13,21 @@ The original architecture had a major inefficiency: **feature extraction was hap
 ## 🚀 New Architecture
 
 ```
-Raw Data → ETL (Data Processing) → Raw Data → Model Training (Feature Engineering) → Trained Model
+Raw Data → ETL (Feature Engineering) → Processed Data → Independent Model Training → Trained Models
 ```
 
 ### **Key Changes:**
 
-1. **ETL Pipeline** (`etl/predictor.py`)
-   - **Simplified** - Only processes and saves raw data
-   - **No feature engineering** - Just data cleaning and format conversion
-   - Saves raw posts as JSON files
-   - Focuses on data quality and consistency
+1. **ETL Pipeline** (`etl/feature_engineer.py`)
+   - **Feature engineering happens here** - Single source of truth
+   - Processes and saves feature-engineered data
+   - Focuses on data quality and feature extraction
 
-2. **Model Training** (`models/predictor/train.py`)
-   - **Feature engineering happens here** - Using shared `HNFeatureEngineer`
-   - Loads raw data and extracts features during training
-   - Saves model with feature engineering metadata
-   - Single source of truth for feature extraction
+2. **Independent Model Training** 
+   - **CBOW Training** (`models/word2vec/cbow/train.py`) - Independent
+   - **SkipGram Training** (`models/word2vec/skipgram/train.py`) - Independent  
+   - **Predictor Training** (`models/predictor/train.py`) - Independent
+   - Each loads processed data and trains independently
 
 3. **Prediction** (`models/predictor/predict.py`)
    - Uses shared feature engineer from training checkpoint
@@ -42,14 +41,24 @@ MLX-Week1/
 ├── etl/
 │   ├── feature_engineer.py          # 🆕 Shared feature engineering logic
 │   └── predictor.py                 # 🔄 Simplified to raw data processing
-├── models/predictor/
-│   ├── model.py                     # 🔄 Contains shared feature engineer
-│   ├── train.py                     # 🔄 Does feature engineering during training
-│   └── predict.py                   # 🔄 Uses shared feature engineer
+├── models/
+│   ├── word2vec/
+│   │   ├── cbow/
+│   │   │   ├── model.py
+│   │   │   ├── train.py
+│   │   │   └── predict.py
+│   │   └── skipgram/
+│   │       ├── model.py
+│   │       ├── train.py
+│   │       └── predict.py
+│   └── predictor/
+│       ├── model.py                 # 🔄 Contains shared feature engineer
+│       ├── train.py                 # 🔄 Does feature engineering during training
+│       └── predict.py               # 🔄 Uses shared feature engineer
 ├── data/
 │   ├── hn_data_raw.json             # 🆕 Raw processed data
 │   └── hn_data_summary.json         # 🆕 Data summary and schema
-└── test_training_architecture.py    # 🆕 Test script
+└── docker-compose.yml               # 🆕 Container orchestration
 ```
 
 ## 🔧 Implementation Details
@@ -175,7 +184,7 @@ Model training
 Run the comprehensive test suite:
 
 ```bash
-python test_training_architecture.py
+python test_enhanced_predictor.py
 ```
 
 This tests:
@@ -194,11 +203,18 @@ Creates:
 - `data/hn_data_raw.json` - Raw processed posts
 - `data/hn_data_summary.json` - Data summary and schema
 
-### **2. Train Model (Feature Engineering)**
+### **2. Train Models (Independent)**
 ```bash
+# Train CBOW
+python models/word2vec/cbow/train.py
+
+# Train SkipGram
+python models/word2vec/skipgram/train.py
+
+# Train Predictor
 python models/predictor/train.py
 ```
-Does feature engineering during training, saves model with metadata.
+Each does feature engineering during training, saves model with metadata.
 
 ### **3. Make Predictions**
 ```bash
@@ -212,7 +228,7 @@ Uses shared feature engineer for consistent predictions.
 
 1. **Backup current data** (optional)
 2. **Run new ETL pipeline** to create raw data
-3. **Retrain model** using new training script (does feature engineering)
+3. **Retrain models** using new training scripts (does feature engineering)
 4. **Update prediction code** to use new predictor class
 
 ### **For New Users:**

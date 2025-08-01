@@ -11,7 +11,6 @@ from torch.utils.data import Dataset, DataLoader, random_split
 import numpy as np
 import yaml
 import argparse
-import wandb
 from tqdm import tqdm
 import sys
 import json
@@ -20,6 +19,12 @@ import json
 sys.path.append('./models/predictor')
 
 from model import EnhancedHNPredictor, EnhancedPredictorConfig, EnhancedHNDataset
+
+# Add the project root directory to Python path for utils
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
+from utils.optional_deps import WandbLogger, HuggingFaceHub, check_optional_deps
 
 def load_yaml_config(path):
     """Load YAML configuration file."""
@@ -234,13 +239,15 @@ def load_precomputed_features(limit=None):
         'scores': scores
     }, feature_names
 
-def train_run(dummy=False, use_precomputed=True):
+def train_run(dummy=False, use_precomputed=True, use_wandb=True, use_hf=True):
     """
     Train the HN Predictor model using pre-computed features or shared feature engineer.
     
     Args:
         dummy (bool): If True, use dummy data for testing
         use_precomputed (bool): If True, use pre-computed features from predictor_data.json
+        use_wandb (bool): If True, enable Weights & Biases logging
+        use_hf (bool): If True, enable Hugging Face Hub integration
         
     Returns:
         tuple: (trained_model, metadata)
@@ -490,8 +497,19 @@ def train_run(dummy=False, use_precomputed=True):
         optimizer, mode='min', factor=0.5, patience=5, verbose=True
     )
     
-    # Initialize wandb
-    wandb.init(project="hn-predictor", name="predictor-run")
+    # Check optional dependencies
+    deps_status = check_optional_deps()
+    
+    # Initialize logging
+    logger = WandbLogger(
+        project_name="hn-predictor",
+        run_name="predictor-run",
+        config=config,
+        enabled=use_wandb and deps_status['wandb']
+    )
+    
+    # Initialize Hugging Face Hub
+    hf_hub = HuggingFaceHub() if use_hf else None
     
     # Training loop
     best_loss = float('inf')
@@ -535,7 +553,7 @@ def train_run(dummy=False, use_precomputed=True):
         current_lr = optimizer.param_groups[0]['lr']
         
         # Log metrics
-        wandb.log({
+        logger.log({
             'epoch': epoch + 1,
             'train_loss': avg_train_loss,
             'val_loss': avg_val_loss,
@@ -575,7 +593,30 @@ def train_run(dummy=False, use_precomputed=True):
             print(f"Early stopping triggered after {epoch + 1} epochs")
             break
     
-    wandb.finish()
+    # Push to Hugging Face Hub if enabled
+    if hf_hub and hf_hub.available and hf_hub.token:
+        try:
+            print("\nPushing model to Hugging Face Hub...")
+            repo_name = f"{os.environ.get('HF_REPO_PREFIX', 'roshbeed')}/hn-predictor-best"
+            
+            model_config = {
+                "model_type": "hn_predictor",
+                "embedding_dim": embedding_dim,
+                "num_categorical_features": len(feature_names),
+                "hidden_dim": config['HIDDEN_DIM'],
+                "dropout": config['DROPOUT'],
+                "training_config": config
+            }
+            
+            success = hf_hub.push_model(model, repo_name, model_config)
+            if success:
+                print(f"Model pushed to {repo_name}")
+            else:
+                print("Failed to push model to Hugging Face Hub")
+        except Exception as e:
+            print(f"Warning: Failed to push model to Hugging Face Hub: {e}")
+
+    logger.finish()
     print("\nTraining completed!")
     print(f"Best val loss: {best_loss:.4f}")
     print(f"Model saved to: {run_ckpt_dir}")
@@ -637,11 +678,35 @@ def main():
     parser = argparse.ArgumentParser(description='Train HN Predictor')
     parser.add_argument('--dummy', action='store_true', help='Use dummy data for testing')
     parser.add_argument('--no-precomputed', action='store_true', help='Force on-the-fly feature engineering instead of using pre-computed features')
+    parser.add_argument('--no-wandb', action='store_true', help='Disable Weights & Biases logging')
+    parser.add_argument('--no-hf', action='store_true', help='Disable Hugging Face Hub integration')
     args = parser.parse_args()
+    
+    # Check optional dependencies
+    deps_status = check_optional_deps()
+    
+    # Set flags based on arguments and availability
+    use_wandb = not args.no_wandb and deps_status['wandb']
+    use_hf = not args.no_hf and deps_status['huggingface']
+    
+    if not deps_status['wandb'] and not args.no_wandb:
+        print("\nWarning: Weights & Biases (wandb) not available.")
+        print("Install with: pip install wandb")
+        print("Or use --no-wandb to disable wandb logging.\n")
+    
+    if not deps_status['huggingface'] and not args.no_hf:
+        print("\nWarning: Hugging Face libraries not available.")
+        print("Install with: pip install transformers huggingface_hub")
+        print("Or use --no-hf to disable Hugging Face integration.\n")
     
     try:
         use_precomputed = not args.no_precomputed
-        model, metadata = train_run(dummy=args.dummy, use_precomputed=use_precomputed)
+        model, metadata = train_run(
+            dummy=args.dummy, 
+            use_precomputed=use_precomputed,
+            use_wandb=use_wandb,
+            use_hf=use_hf
+        )
         print("✅ Training completed successfully!")
         
     except FileNotFoundError as e:

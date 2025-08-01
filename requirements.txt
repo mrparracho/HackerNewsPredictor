@@ -1,7 +1,6 @@
 # Core ML dependencies
 torch==2.2.0
 numpy==1.26.4
-wandb==0.16.3
 tqdm==4.66.1
 pyyaml>=6.0
 
@@ -9,11 +8,15 @@ pyyaml>=6.0
 nltk>=3.8
 requests>=2.31.0
 
+# Optional: Weights & Biases for experiment tracking (uncomment if needed)
+# wandb==0.16.3
+
+# Optional: Hugging Face Transformers and Hub (uncomment if needed)
+# transformers>=4.20.0
+# huggingface_hub>=0.16.0
+# datasets>=2.0.0
+
 # Optional: Visualization (uncomment if needed)
 # matplotlib==3.8.2
 # seaborn==0.13.1
 # scikit-learn==1.4.0
-
-# Optional: Transformers (uncomment if using HuggingFace features)
-# transformers>=4.20.0
-# huggingface_hub>=0.16.0

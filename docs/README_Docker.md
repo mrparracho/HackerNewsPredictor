@@ -1,45 +1,34 @@
 # Docker Setup for HN Score Predictor
 
-## 🐳 Complete Containerized Architecture
+## 🐳 Production-Ready Containerized Architecture
 
-This project is now fully dockerized with a 4-service architecture:
+This project uses **3 independent containers** for production deployment:
 
 ### Services Overview
 
-1. **ML Training Service** - Trains CBOW and prediction models
-2. **API Service** - Serves predictions via FastAPI
-3. **Streamlit Service** - Web UI for predictions
-4. **Jupyter Service** - Development environment (optional)
+1. **ML Training Service** - Independent training of CBOW, SkipGram, and Predictor models
+2. **API Service** - Serves predictions via FastAPI (independent of training)
+3. **Streamlit Service** - Web UI for predictions (independent of training)
 
 ## 🚀 Quick Start
 
 ### 1. Build and Run All Services
 ```bash
-# Build and start all services
+# Build and start all services independently
 docker-compose up --build
-
-# Or run in background
-docker-compose up -d --build
 ```
 
 ### 2. Access Services
 - **Streamlit UI**: http://localhost:8501
 - **API Docs**: http://localhost:8000/docs
 - **API Health**: http://localhost:8000/
-- **Jupyter**: http://localhost:8888 (development profile)
 
-### 3. Development Mode
-```bash
-# Include Jupyter service
-docker-compose --profile development up --build
-```
-
-## 📁 Service Dependencies
+## 📁 Service Independence
 
 ```
-ML Training → API Service → Streamlit Service
-     ↓
-Jupyter Service (optional)
+ML Training Service (Independent)
+API Service (Independent)
+Streamlit Service (Independent)
 ```
 
 ## 🔧 Individual Service Commands
@@ -49,19 +38,19 @@ Jupyter Service (optional)
 docker-compose up ml_training
 ```
 
-### Run API Only (requires trained models)
+### Run API Only (independent)
 ```bash
 docker-compose up api
 ```
 
-### Run Streamlit Only (requires API)
+### Run Streamlit Only (independent)
 ```bash
 docker-compose up streamlit
 ```
 
-### Run Full Stack (API + Streamlit)
+### Run Full Stack (all independent)
 ```bash
-docker-compose up api streamlit
+docker-compose up
 ```
 
 ## 🛠️ Development Workflow
@@ -133,10 +122,9 @@ WANDB_API_KEY=your_wandb_key_here
 
 ## 🎯 What's Dockerized
 
-- ✅ **ML Training Pipeline** (CBOW + Predictor)
+- ✅ **ML Training Pipeline** (CBOW + SkipGram + Predictor)
 - ✅ **FastAPI Backend** (Model serving)
 - ✅ **Streamlit Frontend** (User interface)
-- ✅ **Jupyter Development** (Data exploration)
 - ✅ **GPU Support** (CUDA for training)
 - ✅ **Service Communication** (Internal networking)
 - ✅ **Volume Mounting** (Data persistence)

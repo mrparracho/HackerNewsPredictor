@@ -2,19 +2,22 @@
 
 ## 📋 **Architecture Overview**
 
-We use **2 main containers** for a clean, efficient setup:
+We use **3 independent containers** for production deployment:
 
 ### **Container 1: ML Training Service** (`Dockerfile.ml`)
-- **Purpose**: Train CBOW embeddings and prediction models
+- **Purpose**: Train CBOW, SkipGram, and Predictor models independently
 - **Base Image**: PyTorch with CUDA support
-- **Why**: Heavy computation, GPU access needed
-- **Data**: Uses static files (`text8`, `hn_data_cleaned.json`)
+- **Independence**: Runs independently, saves models to shared volumes
 
 ### **Container 2: API Service** (`Dockerfile.api`)
 - **Purpose**: Serve predictions via REST API
 - **Base Image**: Lightweight Python slim
-- **Why**: Fast inference, minimal dependencies
-- **Data**: Uses trained models (`best_cbow_model.pth`, `best_predictor.pth`)
+- **Independence**: Loads trained models, serves independently
+
+### **Container 3: Streamlit Service** (`Dockerfile.streamlit`)
+- **Purpose**: Web UI for predictions
+- **Base Image**: Lightweight Python slim
+- **Independence**: Connects to API service independently
 
 ## 🚀 **Quick Start**
 
@@ -22,7 +25,6 @@ We use **2 main containers** for a clean, efficient setup:
 ```bash
 # Install Docker and Docker Compose
 # Install NVIDIA Docker (for GPU support)
-# Set up your environment
 ```
 
 ### **1. Environment Setup**
@@ -36,50 +38,42 @@ echo "WANDB_API_KEY=your_wandb_key_here" > .env
 # Build all services
 docker-compose build
 
-# Run ML training (this will train your models)
-docker-compose up ml_training
-
-# After training completes, run the API
-docker-compose up api
+# Run all services
+docker-compose up
 ```
 
 ### **3. Access Services**
+- **Streamlit UI**: http://localhost:8501
 - **API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
-- **Jupyter** (optional): http://localhost:8888
 
 ## 📁 **Data Flow**
 
 ```
-Static Data Files → ML Training → Trained Models → API Service
-     ↓                    ↓              ↓              ↓
-  text8              CBOW Model    best_cbow_model   Predictions
-  hn_data.json       Predictor     best_predictor    REST API
+Raw Data → ETL Pipeline → Processed Data → ML Training → Trained Models → API Service → Predictions
 ```
 
 ## 🔧 **Why This Architecture?**
 
+### **Why 3 Independent Containers?**
+- ✅ **Service Independence**: Each service runs independently
+- ✅ **Resource Optimization**: Heavy training vs lightweight serving
+- ✅ **Scalability**: Can scale services independently
+- ✅ **Security**: Training environment isolated from production
+- ✅ **Maintenance**: Can update services independently
+
 ### **Why No Database Container?**
-- ✅ **Static Data**: Your datasets (`text8`, `hn_data_cleaned.json`) are static files
+- ✅ **Static Data**: Datasets are static files
 - ✅ **No Runtime DB**: Models are trained once, then served from files
 - ✅ **Simpler**: Fewer moving parts, easier to manage
 - ✅ **Faster**: No database overhead during inference
-
-### **Why 2 Containers Instead of 1?**
-- ✅ **Resource Optimization**: Heavy training vs lightweight inference
-- ✅ **Scalability**: Can scale API independently
-- ✅ **Security**: Training environment isolated from production API
-- ✅ **Development**: Can run training separately from serving
 
 ## 📊 **Usage Examples**
 
 ### **Train Models**
 ```bash
-# Train CBOW embeddings
-docker-compose run ml_training python cbow.py
-
-# Train prediction model
-docker-compose run ml_training python prediction/train.py
+# Train all models
+docker-compose up ml_training
 ```
 
 ### **Make Predictions**
@@ -106,17 +100,14 @@ curl http://localhost:8000/model/info
 ### **1. Data Preparation**
 ```bash
 # Your data files should be in:
-./data/text8                    # Wikipedia corpus
-./data/hn_data_cleaned.json     # Hacker News data
+./data/combined_data.txt          # Training corpus
+./data/hn_data_raw.json          # Hacker News data
 ```
 
 ### **2. Model Training**
 ```bash
-# Train CBOW embeddings
-docker-compose run ml_training python cbow.py
-
-# Train prediction model
-docker-compose run ml_training python prediction/train.py
+# Train all models
+docker-compose up ml_training
 ```
 
 ### **3. Model Serving**
@@ -125,10 +116,10 @@ docker-compose run ml_training python prediction/train.py
 docker-compose up api
 ```
 
-### **4. Development with Jupyter**
+### **4. Web Interface**
 ```bash
-# Start Jupyter notebook
-docker-compose --profile development up jupyter
+# Start Streamlit service
+docker-compose up streamlit
 ```
 
 ## 🔍 **File Structure**
@@ -136,16 +127,17 @@ docker-compose --profile development up jupyter
 MLX-Week1/
 ├── Dockerfile.ml              # ML training container
 ├── Dockerfile.api             # API service container
+├── Dockerfile.streamlit       # Streamlit service container
 ├── docker-compose.yml         # Orchestration
 ├── api_service.py             # FastAPI service
 ├── data/                      # Static datasets
-│   ├── text8
-│   └── hn_data_cleaned.json
+│   ├── combined_data.txt
+│   └── hn_data_raw.json
 ├── models/                    # Trained models
-│   ├── best_cbow_model.pth
-│   └── best_predictor.pth
-├── prediction/                # Prediction code
-├── EDA/                      # Data exploration
+│   ├── word2vec/cbow/checkpoints/
+│   ├── word2vec/skipgram/checkpoints/
+│   └── predictor/checkpoints/
+├── streamlit-app/             # Streamlit application
 └── .env                      # Environment variables
 ```
 
@@ -166,21 +158,22 @@ docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi
 ### **Model Loading Issues**
 ```bash
 # Check model files exist
-ls -la best_cbow_model.pth best_predictor.pth
+ls -la models/*/checkpoints/
 ```
 
-## 📈 **Scaling Considerations**
+## 📈 **Production Considerations**
 
 ### **For Production**
 - Use Docker Swarm or Kubernetes
 - Add load balancer for API
 - Implement model versioning
 - Add monitoring and logging
+- Use production-grade base images
 
 ### **For Development**
 - Use volume mounts for live code editing
-- Enable Jupyter notebook for exploration
 - Use smaller datasets for faster iteration
+- Enable debug logging
 
 ## 🎯 **Next Steps**
 

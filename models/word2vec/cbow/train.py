@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import DataLoader
-import wandb
 from tqdm import tqdm
 import yaml
 import os
@@ -18,7 +17,8 @@ from scipy.stats import spearmanr
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from model import CBOWNS, CBOWNegativeSamplingDataset, CBOWConfig, push_to_hub
+from model import CBOWNS, CBOWNegativeSamplingDataset, CBOWConfig
+from utils.optional_deps import WandbLogger, HuggingFaceHub, check_optional_deps
 
 # load YAML config defaults (some keys are lists for sweep)
 def load_yaml_config(path):
@@ -84,9 +84,9 @@ def get_training_data(word_to_index):
     return encoded
 
 
-def evaluate_model(model, step, word_to_ix, embedding_layer=None):
+def evaluate_model(model, step, word_to_ix, logger, embedding_layer=None):
     """
-    Evaluate the model on the analogy task and log the results to wandb.
+    Evaluate the model on the analogy task and log the results.
     """
     # 1. Get embeddings
     if embedding_layer is None:
@@ -118,7 +118,7 @@ def evaluate_model(model, step, word_to_ix, embedding_layer=None):
     predicted = predict_analogy("king", "man", "woman")
     analogy_correct = int(predicted == "queen")
 
-    # 4. t-SNE visualization
+    # 4. t-SNE visualization (commented out for now)
     # def log_tsne():
     #     vectors = embedding_matrix.cpu().numpy()
     #     reduced = TSNE(n_components=2, perplexity=5, random_state=42).fit_transform(vectors)
@@ -129,21 +129,23 @@ def evaluate_model(model, step, word_to_ix, embedding_layer=None):
     #         plt.annotate(word, (x, y))
     #     plt.title(f"t-SNE dos Embeddings - Step {step}")
     #     plt.grid(True)
-    #     wandb.log({f"tsne_step_{step}": wandb.Image(plt)})
+    #     logger.log({f"tsne_step_{step}": wandb.Image(plt)})
     #     plt.close()
 
-    # 5. Logging to wandb
-    wandb.log({
+    # 5. Logging results
+    eval_data = {
         "eval/similarity_spearman": spearman_corr,
         "eval/analogy_correct": analogy_correct,
-        "eval/analogy_accuracy": float(analogy_correct),  # Convert to float for metric logging
+        "eval/analogy_accuracy": float(analogy_correct),
         "eval/analogy_prediction": predicted,
-        "eval/analogy_expected": "queen"  # Log the expected word for reference
-    })
-
+        "eval/analogy_expected": "queen"
+    }
+    
+    logger.log(eval_data, step=step)
+    
     # log_tsne()
 
-def train_run(dummy=False):
+def train_run(dummy=False, use_wandb=True, use_hf=True):
     """
     Train the CBOW model.
     """
@@ -162,9 +164,42 @@ def train_run(dummy=False):
 
     best_loss_path = os.path.join(base_ckpt_dir, "best_loss.txt")
 
-
-    # grab merged config (defaults + sweep overrides)
-    cfg = wandb.config
+    # Check optional dependencies
+    deps_status = check_optional_deps()
+    
+    # Initialize logging
+    if use_wandb and deps_status['wandb']:
+        # Use wandb config if available
+        try:
+            import wandb
+            cfg = wandb.config
+            logger = WandbLogger(
+                project_name=cfg.get("PROJECT_NAME", "word2vec-cbow-ns"),
+                run_name=cfg.get("RUN_NAME", "cbow-run"),
+                config=cfg,
+                enabled=use_wandb
+            )
+        except (ImportError, AttributeError):
+            # Fallback to default config
+            cfg = load_yaml_config("models/word2vec/cbow/cbow_ns.yml")
+            logger = WandbLogger(
+                project_name=cfg.get("PROJECT_NAME", "word2vec-cbow-ns"),
+                run_name=cfg.get("RUN_NAME", "cbow-run"),
+                config=cfg,
+                enabled=False
+            )
+    else:
+        # Use default config without wandb
+        cfg = load_yaml_config("models/word2vec/cbow/cbow_ns.yml")
+        logger = WandbLogger(
+            project_name=cfg.get("PROJECT_NAME", "word2vec-cbow-ns"),
+            run_name=cfg.get("RUN_NAME", "cbow-run"),
+            config=cfg,
+            enabled=False
+        )
+    
+    # Initialize Hugging Face Hub
+    hf_hub = HuggingFaceHub() if use_hf else None
 
     if dummy:
         print("Using dummy vocabulary for testing...")
@@ -218,8 +253,8 @@ def train_run(dummy=False):
             opt.step()
             total_loss += loss.item()
 
-            # Log batch loss to wandb
-            wandb.log({
+            # Log batch loss
+            logger.log({
                 "epoch": epoch + 1,
                 "batch": batch_idx,
                 "batch_loss": loss.item(),
@@ -227,12 +262,12 @@ def train_run(dummy=False):
 
             # Evaluate periodically
             if batch_idx % 100 == 0:
-                evaluate_model(model, batch_idx + epoch * len(loader), word_to_index)
+                evaluate_model(model, batch_idx + epoch * len(loader), word_to_index, logger)
 
             pbar.set_postfix(loss=loss.item())
 
         avg_loss = total_loss / len(loader)
-        wandb.log({
+        logger.log({
             "epoch": epoch + 1,
             "epoch_loss": avg_loss,
         })
@@ -301,17 +336,37 @@ def train_run(dummy=False):
             f.write(f"{best_loss}")
 
         # Push the best model to Hugging Face Hub
-        try:
-            print("\nPushing best model to Hugging Face Hub...")
-            model.load_state_dict(best_model)
-            repo_name = f"roshbeed/cbow-model-{wandb.run.name}"
-            push_to_hub(model, repo_name)
-            print(f"Model pushed to {repo_name}")
-        except Exception as e:
-            print(f"\nWarning: Failed to push model to Hugging Face Hub: {e}")
-            print("The model was still saved locally in the checkpoints directory.")
+        if hf_hub and hf_hub.available and hf_hub.token:
+            try:
+                print("\nPushing best model to Hugging Face Hub...")
+                model.load_state_dict(best_model)
+                
+                # Create repo name
+                if logger.enabled and hasattr(logger, 'run') and logger.run:
+                    repo_name = f"{os.environ.get('HF_REPO_PREFIX', 'roshbeed')}/cbow-model-{logger.run.name}"
+                else:
+                    repo_name = f"{os.environ.get('HF_REPO_PREFIX', 'roshbeed')}/cbow-model-best"
+                
+                # Create model config for HF Hub
+                model_config = {
+                    "model_type": "cbow",
+                    "vocab_size": vocab_size,
+                    "embed_size": cfg.get("EMBEDDING_SIZE", 256),
+                    "window_size": cfg.get("WINDOW_SIZE", 4),
+                    "num_negatives": cfg.get("NUM_NEGATIVES", 15),
+                    "training_config": cfg
+                }
+                
+                success = hf_hub.push_model(model, repo_name, model_config)
+                if success:
+                    print(f"Model pushed to {repo_name}")
+                else:
+                    print("Failed to push model to Hugging Face Hub")
+            except Exception as e:
+                print(f"\nWarning: Failed to push model to Hugging Face Hub: {e}")
+                print("The model was still saved locally in the checkpoints directory.")
 
-    wandb.finish()
+    logger.finish()
     return model, word_to_index
 
 def main():
@@ -324,10 +379,38 @@ def main():
         help="Use dummy vocabulary for testing",
         default=False,
     )
+    parser.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases logging",
+        default=False,
+    )
+    parser.add_argument(
+        "--no-hf",
+        action="store_true",
+        help="Disable Hugging Face Hub integration",
+        default=False,
+    )
     args = parser.parse_args()
 
-    # Check for Hugging Face token
-    if 'HUGGINGFACE_TOKEN' not in os.environ:
+    # Check optional dependencies
+    deps_status = check_optional_deps()
+    
+    # Set flags based on arguments and availability
+    use_wandb = not args.no_wandb and deps_status['wandb']
+    use_hf = not args.no_hf and deps_status['huggingface']
+    
+    if not deps_status['wandb'] and not args.no_wandb:
+        print("\nWarning: Weights & Biases (wandb) not available.")
+        print("Install with: pip install wandb")
+        print("Or use --no-wandb to disable wandb logging.\n")
+    
+    if not deps_status['huggingface'] and not args.no_hf:
+        print("\nWarning: Hugging Face libraries not available.")
+        print("Install with: pip install transformers huggingface_hub")
+        print("Or use --no-hf to disable Hugging Face integration.\n")
+    
+    if not deps_status['huggingface_token'] and use_hf:
         print("\nWarning: HUGGINGFACE_TOKEN environment variable not set.")
         print("The model will be saved locally but won't be pushed to Hugging Face Hub.")
         print("To enable pushing to Hugging Face Hub, set your token using:")
@@ -344,12 +427,20 @@ def main():
         else:
             run_name = defaults["RUN_NAME"]
 
-        wandb.init(
-            project=cfg["PROJECT_NAME"],
-            name=run_name,
-            config=cfg,
-        )
-        train_run(dummy=args.dummy)
+        # Initialize wandb if enabled
+        if use_wandb:
+            try:
+                import wandb
+                wandb.init(
+                    project=cfg["PROJECT_NAME"],
+                    name=run_name,
+                    config=cfg,
+                )
+            except Exception as e:
+                print(f"Failed to initialize wandb: {e}")
+                use_wandb = False
+        
+        train_run(dummy=args.dummy, use_wandb=use_wandb, use_hf=use_hf)
 
 if __name__ == "__main__":
     main()

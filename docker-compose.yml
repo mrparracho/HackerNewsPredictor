@@ -2,20 +2,20 @@ version: '3.8'
 
 services:
   # ML Training Service (Predictor)
-  # ml_training:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.ml
-  #   container_name: mlx_training
-  #   env_file:
-  #     - .env
-  #   volumes:
-  #     - .:/app
-  #     - ./data:/app/data
-  #     - ./models:/app/models
-  #   networks:
-  #     - mlx_network
-  #   command: python models/predictor/train.py
+  ml_training:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    container_name: mlx_training
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - mlx_network
+    command: python models/predictor/train.py
 
   # Enhanced API Service
   api:

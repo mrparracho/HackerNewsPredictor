@@ -1,6 +1,13 @@
 # Core ML dependencies
 torch>=2.0.0
 
+# Optional: Weights & Biases for experiment tracking (uncomment if needed)
+# wandb>=0.15.0
+
+# Optional: Hugging Face Transformers and Hub (uncomment if needed)
+# transformers>=4.20.0
+# huggingface_hub>=0.16.0
+
 # Optional: Visualization (uncomment if using visualization scripts)
 # matplotlib>=3.5.0
 # scikit-learn>=1.1.0
